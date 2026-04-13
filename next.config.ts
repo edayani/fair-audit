@@ -1,16 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Proxy Clerk dev instance through our own domain to avoid
-  // cross-domain cookie issues on deployed environments
-  async rewrites() {
-    return [
-      {
-        source: "/__clerk/:path*",
-        destination: "https://main-fox-24.clerk.accounts.dev/:path*",
-      },
-    ];
-  },
   // Required for @react-pdf/renderer to work in client components
   webpack: (config) => {
     config.resolve.alias.canvas = false;
