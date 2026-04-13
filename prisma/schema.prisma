@@ -1,0 +1,915 @@
+// FairAudit - Fair Housing AI Auditor
+// Prisma Schema - ~35 models covering all 13 modules (Spec Sections 4.A-M)
+// Multi-tenant via organizationId on every tenant-scoped table
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  AUDITOR
+  REVIEWER
+  PROPERTY_MANAGER
+}
+
+enum DecisionOutcome {
+  APPROVED
+  DENIED
+  CONDITIONAL
+  PENDING_REVIEW
+}
+
+enum ChallengeType {
+  ACCURACY    // "this record is wrong"
+  RELEVANCE   // "this record is accurate but should not matter"
+  MITIGATION  // "this happened, but here is why it is not predictive now"
+}
+
+enum ChallengeStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  RESOLVED_ACCEPTED
+  RESOLVED_REJECTED
+}
+
+enum RecordType {
+  CREDIT_REPORT
+  CRIMINAL_HISTORY
+  EVICTION_HISTORY
+  EMPLOYMENT_VERIFICATION
+  RENTAL_HISTORY
+  IDENTITY_VERIFICATION
+  INCOME_VERIFICATION
+  BACKGROUND_CHECK
+}
+
+enum RelevanceLabel {
+  RELEVANT
+  IRRELEVANT
+  CONDITIONAL
+  PROHIBITED
+}
+
+enum CriterionType {
+  CRIMINAL_HISTORY
+  CREDIT_SCORE
+  EVICTION_HISTORY
+  INCOME_REQUIREMENT
+  RENTAL_HISTORY
+  EMPLOYMENT_HISTORY
+  DEBT_TO_INCOME
+  SOURCE_OF_INCOME
+  CUSTOM
+}
+
+enum ComplianceModeType {
+  FEDERAL_CA       // Federal + California (default)
+  COURT_ONLY       // Court-Only Disparate Impact mode
+}
+
+enum JurisdictionLevel {
+  FEDERAL
+  STATE
+  LOCAL
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NoticeType {
+  PRE_ADVERSE
+  ADVERSE_ACTION
+  CONDITIONAL_APPROVAL
+  CORRECTION
+  REQUEST_INFO
+}
+
+enum DriftType {
+  POLICY_DRIFT
+  DATA_DRIFT
+  DISPARITY_DRIFT
+}
+
+enum ReviewAction {
+  APPROVE
+  DENY
+  ESCALATE
+  REQUEST_INFO
+}
+
+// ============================================================
+// ORGANIZATION & USERS (Multi-Tenant Foundation)
+// ============================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  clerkOrgId String  @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Compliance mode - Spec §4.M
+  complianceMode ComplianceModeType @default(FEDERAL_CA)
+  complianceModeDisclaimerAckedAt DateTime?
+  complianceModeDisclaimerAckedBy String?
+
+  // Relations
+  users             User[]
+  properties        Property[]
+  portfolios        Portfolio[]
+  applicants        Applicant[]
+  applications      Application[]
+  jurisdictions     Jurisdiction[]
+  featureRegistries FeatureRegistry[]
+  fairnessMetrics   FairnessMetric[]
+  disparityReports  DisparityReport[]
+  driftAlerts       DriftAlert[]
+  auditLogs         AuditLog[]
+  evidenceVault     EvidenceVaultEntry[]
+  aiaReports        AlgorithmicImpactAssessment[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  clerkUserId    String   @unique
+  email          String
+  name           String?
+  role           UserRole @default(PROPERTY_MANAGER)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  humanReviews   HumanReview[]
+  overrides      Override[]
+
+  @@index([organizationId])
+  @@index([clerkUserId])
+}
+
+// ============================================================
+// PROPERTIES & PORTFOLIOS (Spec §4.A)
+// ============================================================
+
+model Property {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  address        String?
+  city           String?
+  state          String?
+  zipCode        String?
+  unitCount      Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  screeningPolicies ScreeningPolicy[]
+  applications      Application[]
+  portfolioLinks    PortfolioProperty[]
+
+  @@index([organizationId])
+}
+
+model Portfolio {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  propertyLinks PortfolioProperty[]
+
+  @@index([organizationId])
+}
+
+model PortfolioProperty {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+  propertyId  String
+  property    Property  @relation(fields: [propertyId], references: [id])
+
+  @@unique([portfolioId, propertyId])
+}
+
+// ============================================================
+// SCREENING POLICY ENGINE (Spec §4.A)
+// ============================================================
+
+model ScreeningPolicy {
+  id             String   @id @default(cuid())
+  organizationId String
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+  name           String
+  version        Int      @default(1)
+  isActive       Boolean  @default(false)
+  publishedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // The jurisdiction this policy was built for
+  jurisdictionId String?
+  jurisdiction   Jurisdiction? @relation(fields: [jurisdictionId], references: [id])
+
+  // Relations
+  rules     PolicyRule[]
+  decisions Decision[]
+
+  @@index([organizationId])
+  @@index([propertyId])
+}
+
+// Spec §4.A - Individual screening criterion
+model PolicyRule {
+  id                String        @id @default(cuid())
+  screeningPolicyId String
+  screeningPolicy   ScreeningPolicy @relation(fields: [screeningPolicyId], references: [id], onDelete: Cascade)
+  criterionType     CriterionType
+  label             String        // Human-readable name e.g. "Minimum credit score"
+  description       String?       // Detailed description of what this rule checks
+  operator          String        // GT, LT, EQ, BETWEEN, CONTAINS, LOOKBACK_YEARS, etc.
+  value             String        // Threshold value (stored as string, parsed by engine)
+  weight            Float         @default(1.0)
+  isDisqualifying   Boolean       @default(false) // Auto-deny if failed?
+  lookbackMonths    Int?          // How far back to look (null = no limit)
+  waiverConditions  String?       // When this rule can be waived
+  mitigationAllowed Boolean       @default(true) // Can applicant mitigate?
+  isActive          Boolean       @default(true)
+  sortOrder         Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  reasonCodes ReasonCode[]
+
+  @@index([screeningPolicyId])
+}
+
+// ============================================================
+// APPLICANTS & APPLICATIONS (Spec §4.B, §6)
+// ============================================================
+
+model Applicant {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // PII fields - should be encrypted at rest in production
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  dateOfBirth    DateTime?
+  ssnLast4       String?   // Last 4 digits only, for identity matching
+
+  // Demographic data - optional, used for fairness auditing (Spec §4.F)
+  // Collected voluntarily per HUD guidance for civil-rights monitoring
+  race           String?
+  ethnicity      String?
+  sex            String?
+  familialStatus String?
+  disability     Boolean?
+  nationalOrigin String?
+  sourceOfIncome String?  // Voucher, Section 8, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  applications Application[]
+
+  @@index([organizationId])
+  @@index([lastName, firstName])
+}
+
+model Application {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  applicantId    String
+  applicant      Applicant @relation(fields: [applicantId], references: [id])
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+
+  // Application details
+  unitAppliedFor String?
+  monthlyIncome  Float?
+  hasVoucher     Boolean  @default(false)
+  voucherType    String?  // Section 8, VASH, etc.
+  voucherAmount  Float?
+
+  status         String   @default("PENDING") // PENDING, IN_REVIEW, DECIDED, WITHDRAWN
+  submittedAt    DateTime @default(now())
+  decidedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  screeningRecords  ScreeningRecord[]
+  decision          Decision?
+  challenges        Challenge[]
+  notices           Notice[]
+  documents         Document[]
+  accommodations    Accommodation[]
+
+  @@index([organizationId])
+  @@index([propertyId])
+  @@index([applicantId])
+}
+
+// ============================================================
+// DATA INGESTION & RECORDS (Spec §4.B, §4.C)
+// ============================================================
+
+// Spec §4.B - Normalized screening record from any vendor
+model ScreeningRecord {
+  id             String     @id @default(cuid())
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // Source metadata
+  vendorName     String     // TransUnion, Experian, CoreLogic, Manual, etc.
+  vendorRecordId String?    // Vendor's ID for this record
+  recordType     RecordType
+  sourceTimestamp DateTime? // When vendor generated this record
+
+  // Normalized data (Spec §4.B standard schema)
+  rawData        Json       // Original vendor data
+  normalizedData Json       // Standardized format
+
+  // Record details
+  summary        String?    // Human-readable summary
+  disposition    String?    // e.g., "convicted", "dismissed", "paid", "pending"
+  amount         Float?     // For financial records
+  dateOccurred   DateTime?  // When the event happened
+  dateResolved   DateTime?  // When it was resolved
+
+  // Spec §4.C - Identity confidence
+  identityConfidence Float?  // 0-100 score
+  matchMethod        String?  // How identity was matched
+  isQuarantined      Boolean  @default(false)
+  quarantineReason   String?
+
+  // Spec §4.D - Relevance
+  relevance          RelevanceLabel?
+  relevanceReason    String?
+  relevanceOverride  Boolean @default(false)
+
+  // Data quality flags (Spec §4.C)
+  hasDisposition    Boolean @default(true) // Is outcome clear?
+  isSealed          Boolean @default(false)
+  isExpunged        Boolean @default(false)
+  isDuplicate       Boolean @default(false)
+  isStale           Boolean @default(false) // Past FCRA reporting limit
+
+  // Correction tracking
+  correctionStatus  String?  // null, "disputed", "corrected", "confirmed"
+  correctedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([recordType])
+}
+
+// ============================================================
+// DECISIONS & REASON CODES (Spec §4.G, §4.H)
+// ============================================================
+
+model Decision {
+  id                String          @id @default(cuid())
+  applicationId     String          @unique
+  application       Application     @relation(fields: [applicationId], references: [id])
+  screeningPolicyId String
+  screeningPolicy   ScreeningPolicy @relation(fields: [screeningPolicyId], references: [id])
+
+  outcome           DecisionOutcome
+  confidenceScore   Float?          // 0-100, how confident the engine is
+  isAutomatic       Boolean         @default(false) // Was this auto-decided?
+  evaluationData    Json?           // Full evaluation details for audit
+
+  decidedAt         DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  reasonCodes  ReasonCode[]
+  humanReview  HumanReview?
+  override     Override?
+  individualizedAssessment IndividualizedAssessment?
+
+  @@index([applicationId])
+}
+
+// Spec §4.G - Each reason for a decision
+model ReasonCode {
+  id           String   @id @default(cuid())
+  decisionId   String
+  decision     Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  policyRuleId String?
+  policyRule   PolicyRule? @relation(fields: [policyRuleId], references: [id])
+
+  code         String    // e.g., "CR-001", "EV-003"
+  category     String    // Credit, Criminal, Eviction, Income, etc.
+  shortText    String    // Brief reason for notice
+  detailedText String    // Full explanation
+  severity     Severity  @default(MEDIUM)
+  sortOrder    Int       @default(0)
+
+  // LLM-generated reasons (Spec §4.G - LLM use case 2)
+  isLLMGenerated    Boolean @default(false)
+  llmApproved       Boolean @default(false)
+  llmApprovedBy     String?
+  llmApprovedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([decisionId])
+}
+
+// Spec §4.H - Human review record
+model HumanReview {
+  id           String       @id @default(cuid())
+  decisionId   String       @unique
+  decision     Decision     @relation(fields: [decisionId], references: [id])
+  reviewerId   String
+  reviewer     User         @relation(fields: [reviewerId], references: [id])
+
+  action       ReviewAction
+  notes        String?
+  findings     Json?        // Structured review findings
+
+  reviewedAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+
+  @@index([reviewerId])
+}
+
+// Spec §4.H - Override of automated decision
+model Override {
+  id                   String          @id @default(cuid())
+  decisionId           String          @unique
+  decision             Decision        @relation(fields: [decisionId], references: [id])
+  overriddenById       String
+  overriddenBy         User            @relation(fields: [overriddenById], references: [id])
+
+  originalOutcome      DecisionOutcome
+  newOutcome           DecisionOutcome
+  justification        String          // Required: why the override happened
+  overriddenAt         DateTime        @default(now())
+
+  @@index([overriddenById])
+}
+
+// Spec §4.H — HUD Individualized Assessment for Criminal History
+// Required by HUD OGC Memo (2016): 4-factor test before any criminal-history-based denial
+model IndividualizedAssessment {
+  id           String   @id @default(cuid())
+  decisionId   String   @unique
+  decision     Decision @relation(fields: [decisionId], references: [id])
+
+  // HUD Factor 1: Nature and seriousness of the offense
+  natureAndSeriousness     String?
+  natureSeverity           Int?      // 1-5 scale
+
+  // HUD Factor 2: Time elapsed since the offense/conviction
+  timeElapsed              String?
+  timeElapsedMonths        Int?
+
+  // HUD Factor 3: Evidence of rehabilitation or good conduct
+  rehabilitation           String?
+  rehabilitationScore      Int?      // 1-5 scale
+
+  // HUD Factor 4: Mitigating circumstances
+  mitigatingCircumstances  String?
+  mitigatingScore          Int?      // 1-5 scale
+
+  // Assessment outcome
+  tenancyNexus             String?   // How offense relates to tenancy risk
+  overallAssessment        String?   // Assessor's conclusion
+  recommendedOutcome       String?   // APPROVE, DENY, CONDITIONAL
+
+  assessedBy    String    // User who performed the assessment
+  assessedAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([decisionId])
+}
+
+// ============================================================
+// APPLICANT CHALLENGES (Spec §4.I)
+// ============================================================
+
+model Challenge {
+  id             String          @id @default(cuid())
+  applicationId  String
+  application    Application     @relation(fields: [applicationId], references: [id])
+
+  type           ChallengeType
+  status         ChallengeStatus @default(SUBMITTED)
+
+  // Challenge details
+  description    String          // What the applicant is disputing/explaining
+  recordIds      String[]        // Which screening records are being challenged
+
+  // Mitigation-specific (Spec §4.I - type 3)
+  circumstanceType String?       // Job loss, rehab, domestic violence, etc.
+  mitigatingEvidence String?     // Applicant's explanation
+
+  // Resolution
+  resolution       String?       // Outcome description
+  resolvedBy       String?       // User who resolved
+  resolvedAt       DateTime?
+
+  submittedAt    DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relations
+  documents Document[]
+
+  @@index([applicationId])
+}
+
+// Spec §4.I - Reasonable accommodation requests
+model Accommodation {
+  id             String   @id @default(cuid())
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id])
+
+  accommodationType String  // Extended deadline, alternative format, etc.
+  description       String
+  isDisabilityRelated Boolean @default(false) // Never stores specific disability
+  status            String   @default("PENDING") // PENDING, GRANTED, DENIED
+  grantedAt         DateTime?
+  deniedReason      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+}
+
+// ============================================================
+// DOCUMENTS & EVIDENCE (Spec §4.I, §4.K)
+// ============================================================
+
+model Document {
+  id             String   @id @default(cuid())
+  applicationId  String?
+  application    Application? @relation(fields: [applicationId], references: [id])
+  challengeId    String?
+  challenge      Challenge? @relation(fields: [challengeId], references: [id])
+
+  fileName       String
+  fileUrl        String
+  fileType       String     // pdf, image, csv, json, etc.
+  fileSize       Int?
+  documentType   String     // proof_of_income, court_document, voucher_doc, etc.
+  uploadedBy     String?    // User ID or "applicant"
+  description    String?
+  contentHash    String?    // SHA-256 for integrity verification
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId])
+  @@index([challengeId])
+}
+
+// ============================================================
+// NOTICES (Spec §4.J)
+// ============================================================
+
+model Notice {
+  id             String     @id @default(cuid())
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id])
+
+  type           NoticeType
+  content        Json        // Structured notice data for PDF rendering
+
+  // CRA information (required by FCRA)
+  craName        String?     // Consumer Reporting Agency name
+  craAddress     String?
+  craPhone       String?
+
+  // Delivery tracking
+  generatedAt    DateTime    @default(now())
+  sentAt         DateTime?
+  sentMethod     String?     // email, postal, in_person
+  acknowledgedAt DateTime?
+
+  // Related correction (if this is a correction notice)
+  originalNoticeId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId])
+}
+
+// ============================================================
+// PROXY RISK & FEATURE GOVERNANCE (Spec §4.E)
+// ============================================================
+
+model FeatureRegistry {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String     // Variable name
+  displayName    String     // Human-readable name
+  description    String?
+  dataType       String     // string, number, boolean, date, category
+  source         String     // vendor, applicant, staff, computed
+  isActive       Boolean    @default(true)
+
+  // Proxy risk assessment (Spec §4.E)
+  proxyRiskScore     Float?    // 0-1, how likely this is a proxy
+  flaggedAsProxy     Boolean   @default(false)
+  proxyFor           String?   // Which protected class it proxies for
+  proxyExplanation   String?   // Why it's flagged
+  tenancyRelevance   String?   // Why this feature is relevant to tenancy
+  legalReviewStatus  String?   // pending, approved, rejected
+  legalReviewedAt    DateTime?
+  legalReviewedBy    String?
+
+  // LLM proxy detection (Spec §4.E - LLM use case 3)
+  isLLMFlagged       Boolean   @default(false)
+  llmApproved        Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@unique([organizationId, name])
+}
+
+// ============================================================
+// FAIRNESS & MONITORING (Spec §4.F, §4.L)
+// ============================================================
+
+model FairnessMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String?
+
+  metricType     String    // approval_rate, denial_rate, disparate_impact, etc.
+  protectedClass String?   // race, sex, familial_status, etc.
+  groupValue     String?   // e.g., "Black", "Female", "Has children"
+  value          Float     // The metric value
+  sampleSize     Int       // Number of records in calculation
+  periodStart    DateTime
+  periodEnd      DateTime
+  metadata       Json?     // Additional calculation details
+
+  calculatedAt   DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([calculatedAt])
+}
+
+model DisparityReport {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String?
+
+  reportDate     DateTime @default(now())
+  periodStart    DateTime
+  periodEnd      DateTime
+  summary        String?
+  findings       Json     // Detailed findings
+  recommendations Json?   // Suggested actions
+  status         String   @default("DRAFT") // DRAFT, ISSUED, ACKNOWLEDGED, ACTION_PLAN, RESOLVED
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  burdenShiftingAnalyses BurdenShiftingAnalysis[]
+
+  @@index([organizationId])
+}
+
+// HUD Burden-Shifting Analysis (24 CFR § 100.500)
+// 3-prong test when disparate impact is detected
+model BurdenShiftingAnalysis {
+  id                    String          @id @default(cuid())
+  disparityReportId     String
+  disparityReport       DisparityReport @relation(fields: [disparityReportId], references: [id])
+
+  protectedClass        String          // Which protected class this analyzes
+  impactRatio           Float           // The measured ratio triggering this analysis
+
+  // Prong 1: Is the policy facially neutral?
+  isFaciallyNeutral         Boolean?
+  facialNeutralityNotes     String?
+
+  // Prong 2: Is there a less discriminatory alternative?
+  lessDiscriminatoryAltExists  Boolean?
+  lessDiscriminatoryAltNotes   String?
+
+  // Prong 3: Does the policy serve a legitimate business objective?
+  hasLegitimateObjective       Boolean?
+  legitimateObjectiveNotes     String?
+
+  // Overall conclusion
+  conclusion        String?   // JUSTIFIED, UNJUSTIFIED, NEEDS_FURTHER_REVIEW
+  analystNotes      String?
+
+  analyzedBy        String
+  analyzedAt        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([disparityReportId])
+}
+
+model DriftAlert {
+  id             String    @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  driftType      DriftType
+  severity       Severity
+  title          String
+  description    String
+  metricName     String?
+  baselineValue  Float?
+  currentValue   Float?
+  deviationPct   Float?
+  threshold      Float?
+
+  status         String    @default("NEW") // NEW, ACKNOWLEDGED, INVESTIGATING, RESOLVED
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
+  resolution     String?
+
+  detectedAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([detectedAt])
+}
+
+// ============================================================
+// JURISDICTION & RULES ENGINE (Spec §4.M)
+// ============================================================
+
+model Jurisdiction {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String    // e.g., "Federal FHA", "California", "San Francisco"
+  code           String    // e.g., "FED", "CA", "SF"
+  level          JurisdictionLevel
+  parentId       String?   // For hierarchy: local -> state -> federal
+  isActive       Boolean   @default(true)
+  effectiveDate  DateTime  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  rules            JurisdictionRule[]
+  screeningPolicies ScreeningPolicy[]
+
+  @@index([organizationId])
+  @@unique([organizationId, code])
+}
+
+model JurisdictionRule {
+  id             String   @id @default(cuid())
+  jurisdictionId String
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id], onDelete: Cascade)
+
+  category       String    // protected_classes, criminal_history, source_of_income, notice_requirements, etc.
+  ruleKey        String    // Machine-readable key
+  ruleText       String    // Human-readable rule description
+  ruleData       Json?     // Structured rule data for engine processing
+  effectiveDate  DateTime
+  expirationDate DateTime?
+  version        Int       @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jurisdictionId])
+}
+
+// ============================================================
+// ALGORITHMIC IMPACT ASSESSMENT & AI GOVERNANCE
+// Per NIST AI RMF, EU AI Act, Canada AIA Directive
+// ============================================================
+
+model AlgorithmicImpactAssessment {
+  id               String   @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  reportDate       DateTime @default(now())
+  systemDescription String?
+
+  // Risk classification (auto-computed)
+  riskClassification String  @default("MEDIUM") // LOW, MEDIUM, HIGH, UNACCEPTABLE
+
+  // Responsible AI Compliance Scores (0-100)
+  fairnessScore        Float    @default(0)
+  transparencyScore    Float    @default(0)
+  accountabilityScore  Float    @default(0)
+  explainabilityScore  Float    @default(0)
+  humanOversightRate   Float    @default(0)
+  auditCompleteness    Float    @default(0)
+
+  // Detailed findings and mitigations
+  findings           Json?     // Structured assessment findings
+  mitigationActions  Json?     // Documented mitigation steps
+
+  generatedBy  String
+  status       String   @default("DRAFT") // DRAFT, FINAL, ARCHIVED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([reportDate])
+}
+
+// ============================================================
+// IMMUTABLE AUDIT LOG (Spec §4.K)
+// Prisma middleware prevents UPDATE and DELETE on this table
+// ============================================================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // What happened
+  tableName      String    // Which table was affected
+  recordId       String    // ID of the affected record
+  action         String    // CREATE, UPDATE, DELETE, REVIEW, OVERRIDE, etc.
+
+  // Who did it
+  userId         String?
+  userEmail      String?
+  ipAddress      String?
+
+  // Change details
+  before         Json?     // State before change (null for creates)
+  after          Json?     // State after change (null for deletes)
+  metadata       Json?     // Additional context
+
+  timestamp      DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([tableName, recordId])
+  @@index([timestamp])
+  @@index([userId])
+}
+
+// Spec §4.K - Evidence vault for document storage
+model EvidenceVaultEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  entityType     String    // decision, challenge, notice, screening_record
+  entityId       String    // ID of the related entity
+  documentType   String    // notice_pdf, challenge_evidence, vendor_data, etc.
+  fileUrl        String
+  contentHash    String    // SHA-256 for integrity
+  metadata       Json?
+  description    String?
+
+  storedAt       DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+}
