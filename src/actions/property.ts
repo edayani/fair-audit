@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -42,6 +42,8 @@ export async function createProperty(data: {
   unitCount?: number;
 }): Promise<ActionResult<{ id: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const property = await prisma.property.create({
     data: { ...data, organizationId: orgId },
@@ -56,6 +58,8 @@ export async function updateProperty(
   data: { name?: string; address?: string; city?: string; state?: string; zipCode?: string; unitCount?: number }
 ): Promise<ActionResult> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   await prisma.property.updateMany({
     where: { id, organizationId: orgId },

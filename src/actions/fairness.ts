@@ -2,7 +2,7 @@
 
 // Spec §4.F — Fairness Testing & Civil Rights Monitoring Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { computeDisparateImpact, computeFairnessReport } from "@/lib/engines/fairness";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
@@ -12,6 +12,8 @@ export async function runFairnessAnalysis(
   startDate?: string,
   endDate?: string
 ): Promise<ActionResult<{ reportId: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const periodStart = startDate ? new Date(startDate) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
@@ -156,6 +158,8 @@ export async function submitBurdenShiftingAnalysis(
     analystNotes?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId, userId } = await getAuthContext();
   // Verify report belongs to org
   await prisma.disparityReport.findFirstOrThrow({

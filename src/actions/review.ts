@@ -2,7 +2,7 @@
 
 // Spec §4.H — Human Review & Override Workflow Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -34,6 +34,8 @@ export async function submitReview(
   notes: string
 ): Promise<ActionResult> {
   const { orgId, userId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const decision = await prisma.decision.findFirstOrThrow({
     where: { id: decisionId },
@@ -86,6 +88,8 @@ export async function submitOverride(
   justification: string
 ): Promise<ActionResult> {
   const { orgId, userId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const decision = await prisma.decision.findFirstOrThrow({
     where: { id: decisionId },

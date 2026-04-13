@@ -2,11 +2,13 @@
 
 // Spec §4.L — Continuous Monitoring & Drift Detection Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { checkPolicyDrift, checkDataDrift, checkDisparityDrift } from "@/lib/engines/drift";
 import type { ActionResult } from "@/types";
 
 export async function runDriftDetection(): Promise<ActionResult<{ alertsCreated: number }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const now = new Date();
@@ -105,6 +107,8 @@ export async function getDriftAlerts(status?: string) {
 }
 
 export async function acknowledgeDriftAlert(alertId: string, notes?: string): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId, userId } = await getAuthContext();
 
   const alert = await prisma.driftAlert.findFirstOrThrow({

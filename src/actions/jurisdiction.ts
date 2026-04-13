@@ -2,7 +2,7 @@
 
 // Spec §4.M — Jurisdiction & Rules Engine Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -20,6 +20,8 @@ export async function createJurisdiction(data: {
   code: string;
   level: "FEDERAL" | "STATE" | "LOCAL";
 }): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const jurisdiction = await prisma.jurisdiction.create({
@@ -38,6 +40,8 @@ export async function createJurisdictionRule(data: {
   ruleData?: Record<string, unknown>;
   effectiveDate: string;
 }): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   // Verify jurisdiction belongs to org
@@ -61,6 +65,8 @@ export async function setComplianceMode(
   mode: "FEDERAL_CA" | "COURT_ONLY",
   disclaimerAcknowledged?: boolean
 ): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId, userId } = await getAuthContext();
 
   if (mode === "COURT_ONLY" && !disclaimerAcknowledged) {

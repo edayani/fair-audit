@@ -2,7 +2,7 @@
 
 // Spec §4.K — Audit Log & Evidence Vault Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 
 export async function getAuditLog(filters?: {
   tableName?: string;
@@ -84,6 +84,8 @@ export async function storeEvidence(data: {
   metadata?: Record<string, unknown>;
   description?: string;
 }) {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   return prisma.evidenceVaultEntry.create({

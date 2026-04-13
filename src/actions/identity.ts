@@ -2,12 +2,14 @@
 
 // Spec §4.C — Identity Resolution Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { computeIdentityConfidence, assessRecordQuality } from "@/lib/engines/identity";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
 export async function resolveIdentity(applicationId: string): Promise<ActionResult<{ processed: number; quarantined: number }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const application = await prisma.application.findFirstOrThrow({

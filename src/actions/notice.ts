@@ -2,7 +2,7 @@
 
 // Spec §4.J — Adverse-Action & Notice Generator Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -10,6 +10,8 @@ export async function generateNotice(
   applicationId: string,
   type: "PRE_ADVERSE" | "ADVERSE_ACTION" | "CONDITIONAL_APPROVAL" | "CORRECTION" | "REQUEST_INFO"
 ): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const application = await prisma.application.findFirstOrThrow({
@@ -81,6 +83,8 @@ export async function markNoticeSent(
   noticeId: string,
   method: string
 ): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const notice = await prisma.notice.findFirstOrThrow({

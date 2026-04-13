@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 import type { CreateApplicantInput, CreateApplicationInput } from "@/lib/validators/application";
@@ -50,6 +50,8 @@ export async function getApplication(id: string) {
 
 export async function createApplicant(data: CreateApplicantInput): Promise<ActionResult<{ id: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const applicant = await prisma.applicant.create({
     data: {
@@ -64,6 +66,8 @@ export async function createApplicant(data: CreateApplicantInput): Promise<Actio
 
 export async function createApplication(data: CreateApplicationInput): Promise<ActionResult<{ id: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const application = await prisma.application.create({
     data: { ...data, organizationId: orgId },

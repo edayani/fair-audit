@@ -2,7 +2,7 @@
 
 // Spec §4.B — Data Ingestion & Normalization Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -20,6 +20,8 @@ export async function ingestScreeningRecords(
     dateResolved?: string;
   }>
 ): Promise<ActionResult<{ count: number }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   // Verify the application belongs to this org
@@ -63,6 +65,8 @@ export async function quarantineRecord(
   recordId: string,
   reason: string
 ): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   // Verify the record's application belongs to this org

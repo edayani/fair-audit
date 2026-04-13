@@ -2,12 +2,14 @@
 
 // Spec §4.D — Relevance-to-Tenancy Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { labelRecordRelevance, applyCaliforniaRelevanceRules } from "@/lib/engines/relevance";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
 export async function labelApplicationRelevance(applicationId: string): Promise<ActionResult<{ labeled: number }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const application = await prisma.application.findFirstOrThrow({
@@ -54,6 +56,8 @@ export async function overrideRelevance(
   newLabel: "RELEVANT" | "IRRELEVANT" | "CONDITIONAL" | "PROHIBITED",
   reason: string
 ): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const record = await prisma.screeningRecord.findFirstOrThrow({

@@ -1,6 +1,6 @@
 "use server";
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -20,6 +20,8 @@ export async function submitIndividualizedAssessment(
     recommendedOutcome: string; // APPROVE, DENY, CONDITIONAL
   }
 ): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId, userId } = await getAuthContext();
   // Verify the decision belongs to this org
   await prisma.decision.findFirstOrThrow({

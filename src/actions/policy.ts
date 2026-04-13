@@ -2,7 +2,7 @@
 
 // Spec §4.A — Policy Configuration Engine Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { CreatePolicySchema, type CreatePolicyInput } from "@/lib/validators/policy";
 import { callLLMJson } from "@/lib/llm/client";
@@ -11,6 +11,8 @@ import type { ParsedPolicyRule } from "@/lib/llm/types";
 import type { ActionResult } from "@/types";
 
 export async function createPolicy(input: CreatePolicyInput): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
   const parsed = CreatePolicySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message };
@@ -46,6 +48,8 @@ export async function createPolicy(input: CreatePolicyInput): Promise<ActionResu
 }
 
 export async function publishPolicy(policyId: string): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const policy = await prisma.screeningPolicy.findFirstOrThrow({
@@ -81,6 +85,8 @@ export async function getPoliciesForProperty(propertyId: string) {
 export async function parseNaturalLanguagePolicy(
   policyText: string
 ): Promise<ActionResult<ParsedPolicyRule[]>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   try {
     const rules = await callLLMJson<ParsedPolicyRule[]>(
       buildPolicyParserPrompt(policyText),

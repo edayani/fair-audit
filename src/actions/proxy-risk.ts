@@ -2,7 +2,7 @@
 
 // Spec §4.E — Proxy-Risk & Feature Governance Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { evaluateFeatureBatch, checkInteractionEffects } from "@/lib/engines/proxy-risk";
 import { callLLMJson } from "@/lib/llm/client";
 import { PROXY_FLAGGER_SYSTEM, buildProxyFlaggerPrompt } from "@/lib/llm/prompts";
@@ -25,6 +25,8 @@ export async function registerFeature(data: {
   dataType: string;
   source: string;
 }): Promise<ActionResult<{ id: string }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const feature = await prisma.featureRegistry.create({
@@ -36,6 +38,8 @@ export async function registerFeature(data: {
 }
 
 export async function runProxyDetection(): Promise<ActionResult<{ flagged: number }>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const features = await prisma.featureRegistry.findMany({
@@ -67,6 +71,8 @@ export async function runProxyDetection(): Promise<ActionResult<{ flagged: numbe
 
 // §4.E — LLM Use Case 3: Proxy risk flagging with human approval
 export async function llmProxyAnalysis(): Promise<ActionResult<LLMProxyAnalysis>> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   const { orgId } = await getAuthContext();
 
   const features = await prisma.featureRegistry.findMany({

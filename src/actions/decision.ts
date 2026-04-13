@@ -2,7 +2,7 @@
 
 // Spec §4.G, §4.H — Decision Engine & Human Review Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { evaluateApplication } from "@/lib/engines/decision";
 import { generateReasonCodes } from "@/lib/engines/reason-codes";
 import { revalidatePath } from "next/cache";
@@ -10,6 +10,8 @@ import type { ActionResult } from "@/types";
 
 export async function runDecision(applicationId: string): Promise<ActionResult<{ decisionId: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const application = await prisma.application.findFirstOrThrow({
     where: { id: applicationId, organizationId: orgId },

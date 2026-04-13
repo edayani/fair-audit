@@ -2,13 +2,15 @@
 
 // Spec §4.I — Applicant Challenge, Mitigation & Accommodation Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { CreateChallengeInput, CreateAccommodationInput } from "@/lib/validators/challenge";
 import type { ActionResult } from "@/types";
 
 export async function submitChallenge(input: CreateChallengeInput): Promise<ActionResult<{ id: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   await prisma.application.findFirstOrThrow({
     where: { id: input.applicationId, organizationId: orgId },
@@ -35,6 +37,8 @@ export async function resolveChallenge(
   resolution: string
 ): Promise<ActionResult> {
   const { orgId, userId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   const challenge = await prisma.challenge.findFirstOrThrow({
     where: { id: challengeId },
@@ -56,6 +60,8 @@ export async function resolveChallenge(
 
 export async function submitAccommodation(input: CreateAccommodationInput): Promise<ActionResult<{ id: string }>> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   await prisma.application.findFirstOrThrow({
     where: { id: input.applicationId, organizationId: orgId },
@@ -75,6 +81,8 @@ export async function resolveAccommodation(
   deniedReason?: string
 ): Promise<ActionResult> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
   // Verify accommodation belongs to org
   const accommodation = await prisma.accommodation.findFirstOrThrow({
     where: { id: accommodationId, application: { organizationId: orgId } },

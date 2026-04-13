@@ -104,6 +104,11 @@ enum DriftType {
   DISPARITY_DRIFT
 }
 
+enum AccessTier {
+  PREVIEW
+  FULL
+}
+
 enum ReviewAction {
   APPROVE
   DENY
@@ -122,6 +127,9 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Access control
+  accessTier AccessTier @default(PREVIEW)
+
   // Compliance mode - Spec §4.M
   complianceMode ComplianceModeType @default(FEDERAL_CA)
   complianceModeDisclaimerAckedAt DateTime?
@@ -129,6 +137,7 @@ model Organization {
 
   // Relations
   users             User[]
+  accessRequests    AccessRequest[]
   properties        Property[]
   portfolios        Portfolio[]
   applicants        Applicant[]
@@ -912,4 +921,23 @@ model EvidenceVaultEntry {
 
   @@index([organizationId])
   @@index([entityType, entityId])
+}
+
+// ============================================================
+// ACCESS REQUESTS (Preview Mode Gating)
+// ============================================================
+
+model AccessRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  requestedBy    String   // Clerk user ID
+  email          String
+  reason         String?
+  status         String   @default("PENDING") // PENDING, APPROVED, DENIED
+  respondedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([status])
 }

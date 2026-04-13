@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getAuthContext, getAuthContextSafe } from "@/lib/auth";
+import { getAuthContext, getAuthContextSafe, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
 
@@ -13,8 +13,20 @@ export async function getOrganization() {
 }
 
 export async function ensureOrganization(): Promise<string> {
-  // getAuthContext already ensures the org record exists (via resolveDbOrgId)
+  // getAuthContext already ensures the org record exists (via resolveDbOrg)
   const { orgId } = await getAuthContext();
+
+  // Auto-seed demo data for new preview orgs so the dashboard isn't empty
+  const appCount = await prisma.application.count({ where: { organizationId: orgId } });
+  if (appCount === 0) {
+    try {
+      const { seedDemoData } = await import("@/actions/demo");
+      await seedDemoData();
+    } catch {
+      // Seeding is best-effort — don't block the dashboard if it fails
+    }
+  }
+
   return orgId;
 }
 
@@ -22,6 +34,8 @@ export async function updateOrganization(data: {
   name?: string;
 }): Promise<ActionResult> {
   const { orgId } = await getAuthContext();
+  const denied = await requireFullAccess();
+  if (denied) return denied;
 
   await prisma.organization.updateMany({
     where: { id: orgId },
