@@ -1,16 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Proxy Clerk requests through our domain to avoid Cloudflare challenge
-  // on accounts.fairaudit.site that breaks the OAuth callback flow
-  async rewrites() {
-    return [
-      {
-        source: "/__clerk/:path*",
-        destination: "https://clerk.fairaudit.site/:path*",
-      },
-    ];
-  },
   // Required for @react-pdf/renderer to work in client components
   webpack: (config) => {
     config.resolve.alias.canvas = false;
