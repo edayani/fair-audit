@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { getAuthContext } from "@/lib/auth";
-import { ensureOrganization } from "@/actions/settings";
 import { revalidatePath } from "next/cache";
 import { faker } from "@faker-js/faker";
 import type { ActionResult } from "@/types";
@@ -800,10 +799,9 @@ async function generateDemoData(organizationId: string) {
 export async function seedDemoData(): Promise<ActionResult> {
   try {
     const { orgId } = await getAuthContext();
-    const organizationId = await ensureOrganization();
 
     // Clean up any existing demo data for this org
-    const org = await prisma.organization.findFirst({ where: { clerkOrgId: orgId } });
+    const org = await prisma.organization.findFirst({ where: { id: orgId } });
     if (!org) {
       return { success: false, error: "Organization not found" };
     }
