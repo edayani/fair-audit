@@ -4,7 +4,6 @@ export default function SignUpPage() {
   return (
     <ClerkProvider
       dynamic
-      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL ?? "/__clerk"}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
