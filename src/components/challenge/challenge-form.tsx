@@ -2,7 +2,7 @@
 // Spec §4.I — Three challenge types: Accuracy, Relevance, Mitigation
 import { useState, useTransition } from "react";
 import { submitChallenge } from "@/actions/challenge";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function ChallengeForm({ applicationId }: { applicationId: string }) {
   const [isPending, startTransition] = useTransition();

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { submitAccessRequest } from "@/actions/access-request";
 import { Lock, CheckCircle, Clock, Send } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function AccessRequestCard({
   accessTier,

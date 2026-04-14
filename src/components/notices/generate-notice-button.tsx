@@ -2,7 +2,7 @@
 // Spec §4.J — Adverse-action notice generator
 import { useState, useTransition } from "react";
 import { generateNotice } from "@/actions/notice";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { FileOutput } from "lucide-react";
 
 export function GenerateNoticeButton({ applicationId }: { applicationId: string }) {

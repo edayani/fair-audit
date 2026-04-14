@@ -2,7 +2,7 @@
 // Spec §4.H — Human review action card
 import { useState, useTransition } from "react";
 import { submitReview, submitOverride } from "@/actions/review";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { humanize, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { Scale } from "lucide-react";

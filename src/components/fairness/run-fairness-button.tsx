@@ -1,7 +1,7 @@
 "use client";
 import { useTransition } from "react";
 import { runFairnessAnalysis } from "@/actions/fairness";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { BarChart3 } from "lucide-react";
 
 export function RunFairnessButton() {

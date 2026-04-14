@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { approveAccessRequest, denyAccessRequest } from "@/actions/access-request";
 import { CheckCircle, XCircle, Clock, Building2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type AccessRequest = {
   id: string;

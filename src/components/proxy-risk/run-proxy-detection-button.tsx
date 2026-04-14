@@ -2,7 +2,7 @@
 // Spec §4.E — LLM use case 3: proxy-risk flagging, human approval required
 import { useTransition } from "react";
 import { runProxyDetection } from "@/actions/proxy-risk";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Layers } from "lucide-react";
 
 export function RunProxyDetectionButton() {

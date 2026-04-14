@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { generateAIA } from "@/actions/ai-governance";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Brain } from "lucide-react";
 
 export function AIAGenerator() {

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { createPolicy, publishPolicy, parseNaturalLanguagePolicy } from "@/actions/policy";
 import { CRITERION_TYPES, OPERATORS } from "@/lib/constants/screening-criteria";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 
 interface PolicyRule {

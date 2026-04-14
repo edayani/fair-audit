@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { resolveIdentity } from "@/actions/identity";
 import { labelApplicationRelevance } from "@/actions/relevance";
 import { runDecision } from "@/actions/decision";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Play } from "lucide-react";
 
 export function RunPipelineButton({ applicationId }: { applicationId: string }) {

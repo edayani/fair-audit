@@ -1,7 +1,7 @@
 "use client";
 import { useTransition } from "react";
 import { runDriftDetection } from "@/actions/monitoring";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Activity } from "lucide-react";
 
 export function RunDriftButton() {

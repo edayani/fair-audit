@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { createProperty } from "@/actions/property";
 import { PageHeader } from "@/components/shared/page-header";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 
 export default function NewPropertyPage() {

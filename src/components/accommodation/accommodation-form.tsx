@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitAccommodation } from "@/actions/challenge";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const ACCOMMODATION_TYPES = [
   "Extended Deadline",

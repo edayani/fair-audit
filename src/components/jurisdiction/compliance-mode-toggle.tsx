@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { setComplianceMode } from "@/actions/jurisdiction";
 import { COMPLIANCE_MODE_DESCRIPTIONS } from "@/lib/constants/jurisdictions";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { AlertTriangle, Shield, Scale } from "lucide-react";
 
 export function ComplianceModeToggle({ currentMode, disclaimerAckedAt }: { currentMode: string; disclaimerAckedAt: Date | null }) {

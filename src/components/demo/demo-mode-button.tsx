@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { seedDemoData } from "@/actions/demo";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Sparkles } from "lucide-react";
 
 export function DemoModeButton() {

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { submitBurdenShiftingAnalysis } from "@/actions/fairness";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Scale } from "lucide-react";
 
 interface BurdenShiftingAnalysis {
