@@ -96,6 +96,35 @@ export async function getAllAccessRequests() {
 }
 
 /**
+ * Get all signed up users with their organization and access context (admin only).
+ */
+export async function getAllSignedUpUsers() {
+  await requireAdmin();
+
+  return prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          accessTier: true,
+          accessRequests: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              status: true,
+              createdAt: true,
+              respondedAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
  * Approve an access request (admin only).
  */
 export async function approveAccessRequest(requestId: string): Promise<ActionResult> {
