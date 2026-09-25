@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { getAllAccessRequests, getAllSignedUpUsers } from "@/actions/access-request";
+import { isPlatformAdmin } from "@/lib/auth";
 import { AdminRequestsTable } from "@/components/admin/requests-table";
 import { AdminUsersTable } from "@/components/admin/users-table";
 import { PageHeader } from "@/components/shared/page-header";
@@ -6,6 +8,8 @@ import { PageHeader } from "@/components/shared/page-header";
 export const metadata = { title: "Access requests" };
 
 export default async function AdminRequestsPage() {
+  // Layouts and pages render in parallel, so the page enforces access itself too.
+  if (!(await isPlatformAdmin())) redirect("/dashboard");
   const [requests, users] = await Promise.all([
     getAllAccessRequests(),
     getAllSignedUpUsers(),

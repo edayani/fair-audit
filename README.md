@@ -1,6 +1,8 @@
-# FairAudit - Fair Housing AI Auditor
+# FairAudit — Fair housing compliance for affordable & supportive housing
 
-**A compliance and risk-control layer for tenant-screening decisions under the Fair Housing Act.**
+**AI-assisted compliance infrastructure for property managers of affordable, supportive, and homeless housing — making every tenant-screening decision lawful, explainable, reviewable, and defensible.**
+
+Live at [fairaudit.site](https://fairaudit.site).
 
 ---
 
@@ -40,17 +42,15 @@ The system is organized into thirteen modules:
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Next.js 15 (App Router, Server Actions) |
+| Framework | Next.js 16 (App Router, Server Actions, `proxy.ts`) |
 | Language | TypeScript |
-| Styling | Tailwind CSS + shadcn/ui |
-| Database | PostgreSQL with Prisma ORM |
+| Styling | Tailwind CSS v4 with a custom design system (`src/components/ui`) |
+| Database | PostgreSQL with Prisma ORM 7 (`@prisma/adapter-pg`) |
 | Authentication | Clerk (multi-tenant organizations) |
-| File Uploads | UploadThing |
-| PDF Generation | @react-pdf/renderer |
-| LLM Integration | Anthropic Claude (assistive only) |
-| Charts | Recharts |
-| Data Tables | @tanstack/react-table |
+| PDF Generation | @react-pdf/renderer (loaded on demand) |
+| LLM Integration | Anthropic Claude (assistive only, human approval required) |
 | Validation | Zod |
+| Hosting | Vercel (static marketing pages, daily drift cron) |
 
 ## Getting Started
 
@@ -81,7 +81,7 @@ npm install
 cp .env.example .env
 ```
 
-See `.env.example` for all required variables. At minimum you need `DATABASE_URL`, Clerk keys, and an UploadThing token. The Anthropic API key is optional.
+See `.env.example` for all variables. At minimum you need `DATABASE_URL` and the Clerk keys. `ADMIN_EMAIL`, `CRON_SECRET`, `CLERK_WEBHOOK_SIGNING_SECRET`, and `ANTHROPIC_API_KEY` enable the admin console, the daily drift cron, the Clerk webhook, and AI-assisted features respectively.
 
 4. Push the Prisma schema to your database:
 
@@ -109,16 +109,16 @@ npm run dev
 
 8. Open [http://localhost:3000](http://localhost:3000), sign up with Clerk, and create an organization.
 
-9. Click **Demo Mode** in the top bar to populate sample properties, applicants, and screening data.
+9. Click **Sample data** in the top bar (or **Load sample portfolio** on an empty workspace) to populate three California affordable and supportive housing properties with applicants, determinations, challenges, notices, and civil-rights analytics.
 
 ## Compliance Modes
 
 FairAudit ships with two compliance modes, configured in the policy engine:
 
-- **FEDERAL_CA** (default) -- Applies federal Fair Housing Act protections plus California-specific rules (source-of-income, criminal-history lookback limits, local rent-board overlaps). This is the recommended starting point for most deployments.
-- **COURT_ONLY** -- Restricts criteria to those that have survived judicial review. More conservative; useful when operating in jurisdictions with active litigation or consent decrees.
+- **FEDERAL_CA** (default) -- Applies the federal Fair Housing Act together with California's FEHA, including source-of-income protection (Cal. Gov. Code § 12955) and the Civil Rights Council's criminal-history regulations. The most protective standard; recommended.
+- **COURT_ONLY** -- Evaluates discriminatory effects solely under the judicial standard of *Texas Dep't of Housing & Community Affairs v. Inclusive Communities Project, Inc.*, 576 U.S. 519 (2015), without relying on agency regulations. Requires an acknowledged disclaimer that is written to the audit trail.
 
-Both modes account for the January 2026 HUD proposed rule on algorithmic screening, which tightens disparate-impact burden-shifting standards for automated decision systems. The jurisdiction engine (Module M) resolves conflicts when federal, state, and local rules overlap, always applying the most protective standard.
+The jurisdiction engine (Module M) resolves conflicts when federal, state, and local rules overlap, always applying the most protective standard.
 
 ## LLM Integration
 
@@ -135,7 +135,7 @@ All three features require explicit human approval before any output affects a s
 Key architectural patterns:
 
 - **Multi-tenant row-level security** -- Every database query is scoped to the active Clerk organization. Server actions enforce organization context before any read or write.
-- **Immutable audit logs** -- The audit middleware intercepts all Prisma mutations and writes append-only log entries with SHA-256 chained hashes. Entries cannot be modified or deleted.
+- **Immutable audit logs** -- Every server action that changes data writes an attributed audit-log entry (`src/lib/audit.ts`). A Prisma client extension rejects updates and deletes on audit and evidence tables, and preserved evidence carries a SHA-256 content hash.
 - **Server actions with org enforcement** -- All mutations flow through Next.js server actions that verify the caller's organization membership and role before executing.
 - **Decision engine pipeline** -- Applications pass through a sequential pipeline: ingestion, identity resolution, relevance labeling, proxy-risk check, fairness test, reason-code generation, and human review routing. Each stage writes to the audit log.
 
@@ -161,7 +161,7 @@ src/
     review.ts
     settings.ts
   app/              # Next.js App Router pages
-    api/            # API routes (uploadthing, webhooks)
+    api/            # API routes (Clerk webhook, drift cron)
     dashboard/      # Main authenticated UI
       applicants/
       applications/
@@ -213,7 +213,6 @@ src/
     auth.ts
     prisma.ts
     prisma-audit-middleware.ts
-    uploadthing.ts
     utils.ts
   types/            # Shared TypeScript type definitions
 prisma/

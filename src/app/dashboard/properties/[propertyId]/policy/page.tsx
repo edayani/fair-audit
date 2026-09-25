@@ -27,7 +27,7 @@ export default async function PolicyPage({ params }: { params: Promise<{ propert
       <PageHeader
         back={{ href: `/dashboard/properties/${propertyId}`, label: property.name }}
         eyebrow="Screening policy"
-        authority="Spec §4.A · written, versioned criteria"
+        authority="Written, versioned criteria"
         title="Screening policy"
         description="A written, published standard applied uniformly to every applicant. Each criterion must serve a substantial, legitimate, nondiscriminatory interest."
       />

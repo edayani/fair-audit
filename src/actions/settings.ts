@@ -86,7 +86,8 @@ export async function getDashboardStats() {
     prisma.humanReview.count({ where: { decision: inOrg } }),
     prisma.override.count({ where: { decision: inOrg } }),
     prisma.application.findMany({
-      where: { organizationId: orgId, decision: { isNot: null } },
+      // Same population as the Disparate Impact page: final determinations only
+      where: { organizationId: orgId, decidedAt: { not: null }, decision: { isNot: null } },
       select: { decision: { select: { outcome: true } }, applicant: { select: { race: true, sex: true, familialStatus: true, sourceOfIncome: true } } },
       take: 1000,
     }),

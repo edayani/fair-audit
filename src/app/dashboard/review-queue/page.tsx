@@ -15,7 +15,7 @@ export default async function ReviewQueuePage() {
     <div>
       <PageHeader
         eyebrow="Adjudication"
-        authority="Spec §4.H · human-in-the-loop"
+        authority="Human-in-the-loop"
         title="Review queue"
         description="Determinations the engine could not issue on its own. A qualified reviewer decides each one on the record — oldest first."
       />

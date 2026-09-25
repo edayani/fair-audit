@@ -50,13 +50,13 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
             appearance={{
               elements: {
                 rootBox: "flex items-center",
-                organizationSwitcherTrigger: "rounded-lg border border-border px-2.5 py-1.5 text-foreground hover:bg-accent",
-                organizationPreviewMainIdentifier: "text-foreground",
+                organizationSwitcherTrigger: "!rounded-lg !border !border-border !px-2.5 !py-1.5 !text-foreground hover:!bg-accent",
+                organizationPreviewMainIdentifier: "!text-foreground",
               },
             }}
           />
         </div>
-        <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
+        <UserButton appearance={{ elements: { avatarBox: "!size-8" } }} />
       </div>
     </header>
   );

@@ -9,8 +9,9 @@ export const clerkAppearance = {
     fontSize: "0.9rem",
   },
   elements: {
-    organizationSwitcherTrigger: "text-foreground",
-    organizationPreviewMainIdentifier: "text-foreground",
+    // Tailwind v4 utilities live in a cascade layer, so they need ! to beat Clerk's unlayered styles
+    organizationSwitcherTrigger: "!text-foreground",
+    organizationPreviewMainIdentifier: "!text-foreground",
     userButtonTrigger: "focus:shadow-none",
   },
 };
@@ -29,10 +30,12 @@ export const clerkAuthAppearance = {
     rootBox: "w-full",
     cardBox: "w-full shadow-none border border-[#e3e7ef] rounded-2xl",
     card: "shadow-none",
-    headerTitle: "font-serif text-[22px] tracking-tight",
+    headerTitle: "!font-serif !text-[22px] !tracking-tight",
     formButtonPrimary: "shadow-sm normal-case text-sm font-medium",
     footerActionLink: "font-medium",
-    socialButtonsBlockButton: "hidden",
-    dividerRow: "hidden",
+    // Email sign-in only (social providers intentionally disabled)
+    socialButtons: "!hidden",
+    socialButtonsBlockButton: "!hidden",
+    dividerRow: "!hidden",
   },
 };

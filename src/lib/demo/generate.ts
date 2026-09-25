@@ -948,6 +948,40 @@ export async function generateDemoData(orgId: string, reviewerId: string, review
   });
   audit("DisparityReport", disparityReport.id, "FAIRNESS_ANALYSIS", new Date(now - 2 * DAY), { after: { findings: flagged.length } }, true);
 
+  const raceFinding = report.disparateImpactResults.find((r) => r.protectedClass === "race" && r.hasPotentialDisparateImpact);
+  if (raceFinding) {
+    const analysis = {
+      protectedClass: "race",
+      impactRatio: raceFinding.impactRatio,
+      isFaciallyNeutral: true,
+      facialNeutralityNotes:
+        "The eviction-judgment and credit criteria are facially neutral. Adverse outcomes for Black applicants are concentrated in the 36-month eviction-judgment criterion, which identifies the specific practice causing the disparity (robust causality).",
+      hasLegitimateObjective: true,
+      legitimateObjectiveNotes:
+        "Reducing the risk of nonpayment is a substantial, legitimate, nondiscriminatory interest. However, the record contains no validation that a single judgment more than 12 months old predicts nonpayment in a subsidized tenancy where the tenant share is capped.",
+      lessDiscriminatoryAltExists: true,
+      lessDiscriminatoryAltNotes:
+        "Shorten the lookback to 12 months, exclude satisfied judgments and those arising from domestic violence (VAWA), and weigh remaining eviction history through individualized review with mitigation.",
+      conclusion: "NEEDS_FURTHER_REVIEW",
+      analystNotes: "Recommend piloting the 12-month lookback at Mission Street Family Apartments and re-running the disparity report in 90 days.",
+    };
+    const analyzedAt = new Date(now - DAY);
+    const bsa = await prisma.burdenShiftingAnalysis.create({
+      data: { ...analysis, disparityReportId: disparityReport.id, analyzedBy: reviewerEmail ?? "Compliance analyst", analyzedAt, createdAt: analyzedAt },
+    });
+    audit("BurdenShiftingAnalysis", bsa.id, "BURDEN_SHIFTING_ANALYSIS", analyzedAt, { after: { protectedClass: "race", conclusion: analysis.conclusion } }, true);
+    evidenceRows.push({
+      organizationId: orgId,
+      entityType: "disparity_report",
+      entityId: disparityReport.id,
+      documentType: "burden_shifting_analysis",
+      fileUrl: `vault://disparity_report/${disparityReport.id}`,
+      contentHash: sha256(analysis),
+      description: "Three-step burden-shifting analysis — race",
+      storedAt: analyzedAt,
+    });
+  }
+
   await prisma.fairnessMetric.createMany({
     data: report.disparateImpactResults.flatMap((di) =>
       di.groups.map((g) => ({

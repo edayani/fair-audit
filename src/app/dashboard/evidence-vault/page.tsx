@@ -16,7 +16,7 @@ export default async function EvidenceVaultPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Legal record"
-        authority="Spec §4.K · chain of custody"
+        authority="Chain of custody"
         title="Evidence vault"
         description="Notices, individualized assessments, override justifications, and analyses preserved at the moment they were made — each sealed with a SHA-256 content hash so later alteration is detectable."
       />

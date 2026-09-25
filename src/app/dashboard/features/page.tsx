@@ -20,7 +20,7 @@ export default async function FeaturesPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Adjudication"
-        authority="Spec §4.E · proxy discrimination"
+        authority="Proxy discrimination"
         title="Feature governance"
         description="Every data point a screening model can consider, scored for its risk of acting as a proxy for a protected characteristic — so facially neutral inputs don't reproduce prohibited distinctions."
       >

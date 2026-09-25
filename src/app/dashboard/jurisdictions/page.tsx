@@ -21,7 +21,7 @@ export default async function JurisdictionsPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Legal record"
-        authority="Spec §4.M · rule overlays"
+        authority="Rule overlays"
         title="Jurisdictions & rule overlays"
         description="Federal, state, and local fair-housing rules layered onto each property's policy. Where rules overlap, the most protective standard controls."
       />

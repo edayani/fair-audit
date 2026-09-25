@@ -25,7 +25,7 @@ export default async function MonitoringPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Civil rights analytics"
-        authority="Spec §4.L · continuous monitoring"
+        authority="Continuous monitoring"
         title="Monitoring"
         description="Screening systems drift. FairAudit watches for policy, data, and disparity drift daily and turns every signal into an alert that must be acknowledged and resolved on the record."
       >

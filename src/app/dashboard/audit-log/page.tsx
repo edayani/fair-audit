@@ -41,7 +41,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         eyebrow="Legal record"
-        authority="Spec §4.K · append-only"
+        authority="Append-only"
         title="Audit trail"
         description="A contemporaneous, attributed, and immutable record of every material action — the administrative record you produce when a determination is questioned."
       />

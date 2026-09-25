@@ -78,11 +78,11 @@ export default async function ApplicationsPage({
             <THead>
               <tr>
                 <TH>Applicant</TH>
-                <TH>Property</TH>
+                <TH className="hidden sm:table-cell">Property</TH>
                 <TH>Determination</TH>
                 <TH className="hidden md:table-cell">Status</TH>
                 <TH className="hidden lg:table-cell">Signals</TH>
-                <TH className="text-right">Applied</TH>
+                <TH className="hidden text-right sm:table-cell">Applied</TH>
               </tr>
             </THead>
             <TBody>
@@ -92,9 +92,12 @@ export default async function ApplicationsPage({
                     <Link href={`/dashboard/applications/${app.id}`} className="font-medium hover:text-primary hover:underline">
                       {app.applicant.firstName} {app.applicant.lastName}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{app.hasVoucher ? app.voucherType ?? "Voucher holder" : app.applicant.sourceOfIncome ?? "—"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="sm:hidden">{app.property.name} · </span>
+                      {app.hasVoucher ? app.voucherType ?? "Voucher holder" : app.applicant.sourceOfIncome ?? "—"}
+                    </p>
                   </TD>
-                  <TD className="text-muted-foreground">{app.property.name}</TD>
+                  <TD className="hidden text-muted-foreground sm:table-cell">{app.property.name}</TD>
                   <TD>
                     <OutcomeBadge outcome={app.decision?.outcome} />
                   </TD>
@@ -108,7 +111,7 @@ export default async function ApplicationsPage({
                       {app.decision && app.decision.reasonCodes.length > 0 && <Badge tone="brand">{app.decision.reasonCodes.length} reasons</Badge>}
                     </div>
                   </TD>
-                  <TD className="whitespace-nowrap text-right text-muted-foreground">{formatDate(app.submittedAt)}</TD>
+                  <TD className="hidden whitespace-nowrap text-right text-muted-foreground sm:table-cell">{formatDate(app.submittedAt)}</TD>
                 </TR>
               ))}
             </TBody>

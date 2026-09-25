@@ -38,7 +38,7 @@ export function ProductPreview() {
                 { code: "RH-002", text: "Rental history gap during period of homelessness" },
               ].map((r) => (
                 <div key={r.code} className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/80">{r.code}</span>
+                  <span className="shrink-0 whitespace-nowrap rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/80">{r.code}</span>
                   <span className="text-xs leading-snug text-white/75">{r.text}</span>
                 </div>
               ))}
