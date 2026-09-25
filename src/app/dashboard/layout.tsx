@@ -1,22 +1,29 @@
+import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Topbar } from "@/components/layout/topbar";
-import { getAuthContextSafe } from "@/lib/auth";
-import { ensureOrganization } from "@/actions/settings";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getAuthContextSafe, getDbUserId, isPlatformAdmin } from "@/lib/auth";
 import { AccessTierProvider } from "@/components/providers/access-tier-provider";
 import { AppProviders } from "@/components/providers/app-providers";
-import { PreviewBanner } from "@/components/shared/preview-banner";
+import { AppShell } from "@/components/layout/app-shell";
+import { OrgOnboarding } from "@/components/onboarding/org-onboarding";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 
 export const dynamic = "force-dynamic";
+// Server actions inherit this budget (e.g., loading the sample portfolio).
+export const maxDuration = 60;
+
+export const metadata: Metadata = {
+  title: { default: "Workspace", template: "%s · FairAudit" },
+  robots: { index: false, follow: false },
+};
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // Ensure the Clerk org has a matching DB record on every dashboard load
-  const ctx = await getAuthContextSafe();
-  if (ctx) {
-    await ensureOrganization();
-  }
+  const { userId } = await auth();
+  if (!userId) redirect("/sign-in");
 
-  const accessTier = ctx?.accessTier ?? "PREVIEW";
+  const ctx = await getAuthContextSafe();
 
   return (
     <ClerkProvider
@@ -24,21 +31,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/dashboard"
+      appearance={clerkAppearance}
     >
-      <AppProviders>
-        <AccessTierProvider accessTier={accessTier}>
-          <div className="flex h-screen overflow-hidden">
-            <AppSidebar />
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <Topbar />
-              <main className="flex-1 overflow-y-auto p-6">
-                <PreviewBanner />
-                {children}
-              </main>
-            </div>
-          </div>
-        </AccessTierProvider>
-      </AppProviders>
+      <AppProviders>{ctx ? <Workspace ctx={ctx}>{children}</Workspace> : <OrgOnboarding />}</AppProviders>
     </ClerkProvider>
+  );
+}
+
+async function Workspace({
+  ctx,
+  children,
+}: {
+  ctx: NonNullable<Awaited<ReturnType<typeof getAuthContextSafe>>>;
+  children: React.ReactNode;
+}) {
+  const [pendingReviews, newAlerts, isAdmin] = await Promise.all([
+    prisma.decision.count({ where: { outcome: "PENDING_REVIEW", application: { organizationId: ctx.orgId } } }),
+    prisma.driftAlert.count({ where: { organizationId: ctx.orgId, status: "NEW" } }),
+    isPlatformAdmin(),
+    // Keep a local User row in sync (reviewer attribution, admin roster)
+    getDbUserId().catch((error) => console.error("Failed to sync user record", error)),
+  ]);
+
+  return (
+    <AccessTierProvider accessTier={ctx.accessTier}>
+      <AppShell counts={{ pendingReviews, newAlerts }} accessTier={ctx.accessTier} isAdmin={isAdmin}>
+        {children}
+      </AppShell>
+    </AccessTierProvider>
   );
 }

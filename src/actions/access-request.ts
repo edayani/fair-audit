@@ -1,17 +1,10 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { getAuthContext, isPlatformAdmin } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/types";
-
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
-function isAdmin(email: string | null | undefined): boolean {
-  if (!ADMIN_EMAIL || !email) return false;
-  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-}
 
 /**
  * Submit an access request for the current org.
@@ -36,16 +29,18 @@ export async function submitAccessRequest(reason: string): Promise<ActionResult>
     return { success: false, error: "You already have a pending access request." };
   }
 
-  await prisma.accessRequest.create({
+  const request = await prisma.accessRequest.create({
     data: {
       organizationId: orgId,
       requestedBy: userId,
       email: userEmail ?? "unknown",
-      reason: reason || null,
+      reason: reason.trim().slice(0, 2000) || null,
     },
   });
 
-  revalidatePath("/dashboard/settings");
+  await recordAudit({ tableName: "AccessRequest", recordId: request.id, action: "ACCESS_REQUESTED" });
+
+  revalidatePath("/dashboard", "layout");
   return { success: true };
 }
 
@@ -72,9 +67,7 @@ export async function getAccessRequestStatus() {
 // ============================================================
 
 async function requireAdmin() {
-  const user = await currentUser();
-  const email = user?.emailAddresses?.[0]?.emailAddress;
-  if (!isAdmin(email)) {
+  if (!(await isPlatformAdmin())) {
     throw new Error("Unauthorized: admin access required.");
   }
 }
@@ -130,9 +123,10 @@ export async function getAllSignedUpUsers() {
 export async function approveAccessRequest(requestId: string): Promise<ActionResult> {
   await requireAdmin();
 
-  const request = await prisma.accessRequest.findFirstOrThrow({
+  const request = await prisma.accessRequest.findFirst({
     where: { id: requestId },
   });
+  if (!request) return { success: false, error: "Request not found" };
 
   await prisma.$transaction([
     prisma.accessRequest.update({

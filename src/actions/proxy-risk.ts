@@ -8,6 +8,7 @@ import { callLLMJson } from "@/lib/llm/client";
 import { PROXY_FLAGGER_SYSTEM, buildProxyFlaggerPrompt } from "@/lib/llm/prompts";
 import type { LLMProxyAnalysis } from "@/lib/llm/types";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function getFeatureRegistry() {
@@ -33,6 +34,7 @@ export async function registerFeature(data: {
     data: { ...data, organizationId: orgId },
   });
 
+  await recordAudit({ tableName: "FeatureRegistry", recordId: feature.id, action: "CREATE", after: { name: data.name } });
   revalidatePath("/dashboard/features");
   return { success: true, data: { id: feature.id } };
 }
@@ -45,6 +47,8 @@ export async function runProxyDetection(): Promise<ActionResult<{ flagged: numbe
   const features = await prisma.featureRegistry.findMany({
     where: { organizationId: orgId, isActive: true },
   });
+
+  if (features.length === 0) return { success: false, error: "No active features are registered yet." };
 
   const results = evaluateFeatureBatch(features.map((f) => f.name));
   const interaction = checkInteractionEffects(features.map((f) => f.name));
@@ -64,6 +68,13 @@ export async function runProxyDetection(): Promise<ActionResult<{ flagged: numbe
     });
     if (result.isProxy) flagged++;
   }
+
+  await recordAudit({
+    tableName: "FeatureRegistry",
+    recordId: orgId,
+    action: "PROXY_DETECTION",
+    after: { evaluated: features.length, flagged },
+  });
 
   revalidatePath("/dashboard/features");
   return { success: true, data: { flagged } };
@@ -100,6 +111,7 @@ export async function llmProxyAnalysis(): Promise<ActionResult<LLMProxyAnalysis>
 
     return { success: true, data: analysis };
   } catch (error) {
-    return { success: false, error: `LLM analysis failed: ${error}` };
+    console.error("LLM proxy analysis failed:", error);
+    return { success: false, error: "AI-assisted analysis is unavailable right now. Deterministic detection still applies." };
   }
 }

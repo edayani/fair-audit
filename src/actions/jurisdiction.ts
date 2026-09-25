@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function getJurisdictions() {
@@ -28,6 +29,7 @@ export async function createJurisdiction(data: {
     data: { ...data, organizationId: orgId },
   });
 
+  await recordAudit({ tableName: "Jurisdiction", recordId: jurisdiction.id, action: "CREATE", after: data });
   revalidatePath("/dashboard/jurisdictions");
   return { success: true, data: { id: jurisdiction.id } };
 }
@@ -45,11 +47,13 @@ export async function createJurisdictionRule(data: {
   const { orgId } = await getAuthContext();
 
   // Verify jurisdiction belongs to org
-  await prisma.jurisdiction.findFirstOrThrow({
+  const jurisdiction = await prisma.jurisdiction.findFirst({
     where: { id: data.jurisdictionId, organizationId: orgId },
+    select: { id: true },
   });
+  if (!jurisdiction) return { success: false, error: "Jurisdiction not found" };
 
-  await prisma.jurisdictionRule.create({
+  const rule = await prisma.jurisdictionRule.create({
     data: {
       ...data,
       effectiveDate: new Date(data.effectiveDate),
@@ -57,6 +61,7 @@ export async function createJurisdictionRule(data: {
     },
   });
 
+  await recordAudit({ tableName: "JurisdictionRule", recordId: rule.id, action: "CREATE", after: { ruleKey: data.ruleKey, category: data.category } });
   revalidatePath("/dashboard/jurisdictions");
   return { success: true };
 }
@@ -67,7 +72,7 @@ export async function setComplianceMode(
 ): Promise<ActionResult> {
   const denied = await requireFullAccess();
   if (denied) return denied;
-  const { orgId, userId } = await getAuthContext();
+  const { orgId, userId, userEmail } = await getAuthContext();
 
   if (mode === "COURT_ONLY" && !disclaimerAcknowledged) {
     return {
@@ -82,12 +87,19 @@ export async function setComplianceMode(
       complianceMode: mode,
       ...(mode === "COURT_ONLY" && {
         complianceModeDisclaimerAckedAt: new Date(),
-        complianceModeDisclaimerAckedBy: userId,
+        complianceModeDisclaimerAckedBy: userEmail ?? userId,
       }),
     },
   });
 
-  revalidatePath("/dashboard/settings/compliance");
+  await recordAudit({
+    tableName: "Organization",
+    recordId: orgId,
+    action: "COMPLIANCE_MODE_CHANGED",
+    after: { complianceMode: mode, disclaimerAcknowledged: !!disclaimerAcknowledged },
+  });
+
+  revalidatePath("/dashboard", "layout");
   return { success: true };
 }
 

@@ -51,14 +51,14 @@ export function resolveJurisdictionRules(
 ): ResolvedRuleSet {
   // Start with federal baseline
   let protectedClasses = [...FEDERAL_PROTECTED_CLASSES];
-  let criminalHistoryRules: CriminalHistoryRules = {
+  const criminalHistoryRules: CriminalHistoryRules = {
     requiresIndividualizedAssessment: true, // HUD recommends this
     lookbackYears: null,
     excludedOffenseTypes: [],
     autoRejectProhibited: false,
   };
   let sourceOfIncomeProtected = false;
-  let noticeRequirements: NoticeRequirements = {
+  const noticeRequirements: NoticeRequirements = {
     preAdverseRequired: true,    // FCRA baseline
     preAdverseWaitDays: 5,
     freeReportDays: 60,
@@ -148,9 +148,9 @@ export function resolveJurisdictionRules(
   // Court-Only mode: narrower disparate impact standard
   if (complianceMode === "COURT_ONLY") {
     specialRules["disparate_impact_standard"] =
-      "Using court-defined disparate impact standard only. " +
-      "Disclaimer: The Jan 2026 HUD proposed rule would remove codified discriminatory-effects regulations. " +
-      "This mode applies only the Supreme Court's narrower standard from Texas Dept. of Housing v. Inclusive Communities (2015).";
+      "Using the judicially recognized disparate-impact standard only. " +
+      "Federal regulatory standards (24 C.F.R. § 100.500) are subject to ongoing rulemaking and litigation; " +
+      "this mode applies the standard from Texas Dep't of Housing & Community Affairs v. Inclusive Communities Project, Inc., 576 U.S. 519 (2015).";
   }
 
   return {

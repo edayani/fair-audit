@@ -1,32 +1,45 @@
 "use client";
 // Spec §4.J — Adverse-action notice generator
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { FilePlus2 } from "lucide-react";
 import { generateNotice } from "@/actions/notice";
 import { toast } from "@/lib/toast";
-import { FileOutput } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/form";
 
-export function GenerateNoticeButton({ applicationId }: { applicationId: string }) {
+type NoticeType = "ADVERSE_ACTION" | "PRE_ADVERSE" | "CONDITIONAL_APPROVAL" | "CORRECTION" | "REQUEST_INFO";
+
+export function GenerateNoticeButton({ applicationId, defaultType = "ADVERSE_ACTION" }: { applicationId: string; defaultType?: NoticeType }) {
   const [isPending, startTransition] = useTransition();
-  const [type, setType] = useState<"ADVERSE_ACTION" | "CONDITIONAL_APPROVAL" | "CORRECTION">("ADVERSE_ACTION");
+  const [type, setType] = useState<NoticeType>(defaultType);
+  const router = useRouter();
 
   function handleGenerate() {
     startTransition(async () => {
       const result = await generateNotice(applicationId, type);
-      if (result.success) toast.success("Notice generated");
-      else toast.error(result.error ?? "Failed");
+      if (result.success) {
+        toast.success("Notice generated and preserved to the evidence vault");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to generate notice");
+      }
     });
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <select value={type} onChange={(e) => setType(e.target.value as typeof type)} className="rounded-md border bg-background px-3 py-2 text-sm">
-        <option value="ADVERSE_ACTION">Adverse Action</option>
-        <option value="CONDITIONAL_APPROVAL">Conditional Approval</option>
-        <option value="CORRECTION">Correction</option>
-      </select>
-      <button onClick={handleGenerate} disabled={isPending} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-        <FileOutput className="h-4 w-4" /> {isPending ? "Generating..." : "Generate Notice"}
-      </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={type} onChange={(e) => setType(e.target.value as NoticeType)} className="w-auto" aria-label="Notice type">
+        <option value="ADVERSE_ACTION">Adverse action</option>
+        <option value="PRE_ADVERSE">Pre-adverse action</option>
+        <option value="CONDITIONAL_APPROVAL">Conditional approval</option>
+        <option value="CORRECTION">Corrected determination</option>
+        <option value="REQUEST_INFO">Request for information</option>
+      </Select>
+      <Button onClick={handleGenerate} loading={isPending}>
+        {!isPending && <FilePlus2 />}
+        Generate notice
+      </Button>
     </div>
   );
 }

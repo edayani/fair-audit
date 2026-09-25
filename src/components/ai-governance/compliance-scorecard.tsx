@@ -1,6 +1,5 @@
-"use client";
-
-import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface Scores {
   fairnessScore: number;
@@ -13,86 +12,64 @@ interface Scores {
   riskClassification: string;
 }
 
-function getScoreColor(score: number): string {
-  if (score >= 80) return "hsl(142, 76%, 36%)";
-  if (score >= 60) return "hsl(48, 96%, 53%)";
-  return "hsl(0, 84%, 60%)";
+const METRICS: Array<{ key: keyof Scores; name: string; detail: string }> = [
+  { key: "fairnessScore", name: "Fairness", detail: "Mean impact ratio across monitored classes" },
+  { key: "transparencyScore", name: "Transparency", detail: "Determinations carrying reason codes" },
+  { key: "accountabilityScore", name: "Accountability", detail: "Alerts and proxy flags resolved or reviewed" },
+  { key: "explainabilityScore", name: "Individualized review", detail: "Criminal-history cases with an assessment" },
+  { key: "humanOversightRate", name: "Human oversight", detail: "Determinations reviewed by a person" },
+  { key: "auditCompleteness", name: "Record completeness", detail: "Audit coverage of material actions" },
+];
+
+function tone(score: number) {
+  return score >= 80 ? "text-emerald-600 dark:text-emerald-400" : score >= 60 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
+}
+function ringColor(score: number) {
+  return score >= 80 ? "#10b981" : score >= 60 ? "#f59e0b" : "#f43f5e";
 }
 
-function getGradeColor(grade: string): string {
-  switch (grade) {
-    case "A": return "bg-green-500 text-white";
-    case "B": return "bg-blue-500 text-white";
-    case "C": return "bg-yellow-500 text-white";
-    case "D": return "bg-orange-500 text-white";
-    default: return "bg-red-500 text-white";
-  }
-}
-
-function getRiskBadgeColor(risk: string): string {
-  switch (risk) {
-    case "LOW": return "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
-    case "MEDIUM": return "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
-    case "HIGH": return "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800";
-    case "UNACCEPTABLE": return "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
-    default: return "bg-gray-50 text-gray-700 border-gray-200";
-  }
-}
-
-function MetricCard({ name, score }: { name: string; score: number }) {
-  const color = getScoreColor(score);
+function Ring({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, score));
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-sm text-muted-foreground mb-2">{name}</p>
-      <div className="flex items-center gap-3">
-        <RadialBarChart
-          width={80}
-          height={80}
-          innerRadius="70%"
-          outerRadius="100%"
-          data={[{ value: score, fill: color }]}
-          startAngle={90}
-          endAngle={-270}
-        >
-          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-          <RadialBar dataKey="value" cornerRadius={5} background={{ fill: "hsl(var(--muted))" }} />
-        </RadialBarChart>
-        <span className="text-2xl font-bold" style={{ color }}>
-          {score.toFixed(1)}
-        </span>
-      </div>
+    <div
+      className="relative size-14 shrink-0 rounded-full"
+      style={{ background: `conic-gradient(${ringColor(pct)} ${pct * 3.6}deg, var(--muted) 0deg)` }}
+      aria-hidden
+    >
+      <div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-card text-xs font-semibold tabular">{Math.round(pct)}</div>
     </div>
   );
 }
 
-export function ComplianceScorecard({ scores }: { scores: Scores }) {
-  const metrics = [
-    { name: "Fairness", score: scores.fairnessScore },
-    { name: "Transparency", score: scores.transparencyScore },
-    { name: "Accountability", score: scores.accountabilityScore },
-    { name: "Explainability", score: scores.explainabilityScore },
-    { name: "Human Oversight", score: scores.humanOversightRate },
-    { name: "Audit Completeness", score: scores.auditCompleteness },
-  ];
+const RISK_TONE: Record<string, "success" | "warning" | "danger"> = { LOW: "success", MEDIUM: "warning", HIGH: "danger", UNACCEPTABLE: "danger" };
 
+export function ComplianceScorecard({ scores }: { scores: Scores }) {
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <div className={`flex items-center justify-center w-20 h-20 rounded-full text-4xl font-bold ${getGradeColor(scores.overallGrade)}`}>
-          {scores.overallGrade}
-        </div>
+    <div className="rounded-xl border bg-card">
+      <div className="flex flex-wrap items-center gap-5 border-b px-5 py-5 sm:px-6">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-ink font-serif text-4xl font-semibold text-white">{scores.overallGrade}</div>
         <div>
-          <p className="text-lg font-semibold">Overall Compliance Grade</p>
-          <span className={`inline-block mt-1 text-xs px-2.5 py-1 rounded-full border ${getRiskBadgeColor(scores.riskClassification)}`}>
-            Risk: {scores.riskClassification}
-          </span>
+          <p className="text-sm text-muted-foreground">Overall governance grade</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge tone={RISK_TONE[scores.riskClassification] ?? "neutral"}>Risk: {scores.riskClassification.toLowerCase()}</Badge>
+            <span className="text-xs text-muted-foreground">Mapped to NIST AI RMF functions: Govern · Map · Measure · Manage</span>
+          </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {metrics.map((m) => (
-          <MetricCard key={m.name} name={m.name} score={m.score} />
-        ))}
+      <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
+        {METRICS.map((m) => {
+          const value = scores[m.key] as number;
+          return (
+            <div key={m.key} className="flex items-center gap-4 bg-card px-5 py-4 sm:px-6">
+              <Ring score={value} />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{m.name}</p>
+                <p className={cn("font-serif text-xl font-semibold tabular", tone(value))}>{value.toFixed(1)}</p>
+                <p className="text-xs leading-snug text-muted-foreground">{m.detail}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

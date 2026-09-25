@@ -2,14 +2,20 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { submitAccommodation } from "@/actions/challenge";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { resolveAccommodation, submitAccommodation } from "@/actions/challenge";
 import { toast } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { Checkbox, Field, Select, Textarea } from "@/components/ui/form";
 
 const ACCOMMODATION_TYPES = [
-  "Extended Deadline",
-  "Alternative Format",
-  "Communication Assistance",
-  "Modified Process",
+  "Waiver of screening criterion",
+  "Extended deadline",
+  "Alternative format or language access",
+  "Communication assistance",
+  "Third-party representative or advocate",
+  "Assistance animal",
+  "Modified application process",
   "Other",
 ];
 
@@ -23,14 +29,9 @@ export function AccommodationForm({ applicationId }: { applicationId: string }) 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      const result = await submitAccommodation({
-        applicationId,
-        accommodationType,
-        description,
-        isDisabilityRelated,
-      });
+      const result = await submitAccommodation({ applicationId, accommodationType, description, isDisabilityRelated });
       if (result.success) {
-        toast.success("Accommodation request submitted");
+        toast.success("Accommodation request logged — begin the interactive process");
         setAccommodationType("");
         setDescription("");
         setIsDisabilityRelated(false);
@@ -42,60 +43,100 @@ export function AccommodationForm({ applicationId }: { applicationId: string }) 
   }
 
   return (
-    <div className="rounded-lg border bg-card p-6">
-      <h3 className="text-lg font-semibold mb-4">Request Accommodation</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Accommodation Type</label>
-          <select
-            value={accommodationType}
-            onChange={(e) => setAccommodationType(e.target.value)}
-            required
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          >
-            <option value="">Select type...</option>
+    <form onSubmit={handleSubmit} className="rounded-xl border bg-card">
+      <div className="border-b px-5 py-4 sm:px-6">
+        <h3 className="text-[15px] font-semibold">Log a reasonable accommodation request</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Requests may be made at any time, orally or in writing, by the applicant or someone acting on their behalf.
+        </p>
+      </div>
+      <div className="space-y-4 px-5 py-5 sm:px-6">
+        <Field label="Type of accommodation" required>
+          <Select value={accommodationType} onChange={(e) => setAccommodationType(e.target.value)} required>
+            <option value="">Select…</option>
             {ACCOMMODATION_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
+          </Select>
+        </Field>
+        <Field label="Requested change" required>
+          <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             required
             minLength={10}
             rows={3}
-            placeholder="Describe the accommodation you need..."
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            placeholder="Describe the rule, policy, practice, or service to be modified and why it is needed…"
           />
-        </div>
-
+        </Field>
         <div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isDisabilityRelated}
-              onChange={(e) => setIsDisabilityRelated(e.target.checked)}
-              className="rounded border"
-            />
-            <span className="font-medium">Disability-Related</span>
-          </label>
-          <p className="text-xs text-muted-foreground mt-1 ml-6">
-            Check if this accommodation request is related to a disability. Per the ADA and FHA, we will never request or store information about the specific nature of any disability.
+          <Checkbox label="Disability-related request" checked={isDisabilityRelated} onChange={(e) => setIsDisabilityRelated(e.target.checked)} />
+          <p className="mt-1 pl-6 text-xs leading-relaxed text-muted-foreground">
+            FairAudit records only that a request is disability-related — never the nature or diagnosis of a disability.
+            Verification, where permitted, is limited to the disability-related need for the accommodation.
           </p>
         </div>
+        <div className="flex justify-end">
+          <Button type="submit" loading={isPending}>
+            Log request
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {isPending ? "Submitting..." : "Submit Request"}
-        </button>
-      </form>
+export function AccommodationResolver({ accommodationId }: { accommodationId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [denying, setDenying] = useState(false);
+  const [reason, setReason] = useState("");
+
+  function resolve(status: "GRANTED" | "DENIED") {
+    startTransition(async () => {
+      const result = await resolveAccommodation(accommodationId, status, status === "DENIED" ? reason : undefined);
+      if (result.success) {
+        toast.success(status === "GRANTED" ? "Accommodation granted" : "Denial recorded with reasons");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to update");
+      }
+    });
+  }
+
+  if (denying) {
+    return (
+      <div className="mt-3 w-full space-y-2 rounded-lg border bg-muted/40 p-3">
+        <Textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Denials are permitted only for undue burden, fundamental alteration, or direct threat — and only after exploring alternatives…"
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setDenying(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => resolve("DENIED")} loading={isPending}>
+            Record denial
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" onClick={() => setDenying(true)} disabled={isPending}>
+        <XCircle />
+        Deny
+      </Button>
+      <Button variant="success" size="sm" onClick={() => resolve("GRANTED")} loading={isPending}>
+        {!isPending && <CheckCircle2 />}
+        Grant
+      </Button>
     </div>
   );
 }

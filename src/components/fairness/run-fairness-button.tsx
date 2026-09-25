@@ -1,17 +1,22 @@
 "use client";
+
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { BarChart3 } from "lucide-react";
 import { runFairnessAnalysis } from "@/actions/fairness";
 import { toast } from "@/lib/toast";
-import { BarChart3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function RunFairnessButton() {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleRun() {
     startTransition(async () => {
       const result = await runFairnessAnalysis();
       if (result.success) {
-        toast.success("Fairness analysis complete");
+        toast.success("Disparity report issued for the last 90 days");
+        router.refresh();
       } else {
         toast.error(result.error ?? "Analysis failed");
       }
@@ -19,8 +24,9 @@ export function RunFairnessButton() {
   }
 
   return (
-    <button onClick={handleRun} disabled={isPending} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-      <BarChart3 className="h-4 w-4" /> {isPending ? "Analyzing..." : "Run Analysis"}
-    </button>
+    <Button onClick={handleRun} loading={isPending}>
+      {!isPending && <BarChart3 />}
+      Issue disparity report
+    </Button>
   );
 }

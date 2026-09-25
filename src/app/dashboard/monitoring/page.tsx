@@ -1,50 +1,84 @@
+import { Activity, AlertTriangle, BellRing, CheckCircle2 } from "lucide-react";
 import { getDriftAlerts } from "@/actions/monitoring";
 import { PageHeader } from "@/components/shared/page-header";
-import { RunDriftButton } from "@/components/monitoring/run-drift-button";
-import { formatDate, humanize, getSeverityColor } from "@/lib/utils";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertActions, RunDriftButton } from "@/components/monitoring/run-drift-button";
+import { PreviewGate } from "@/components/shared/preview-gate";
+import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard } from "@/components/shared/stat-card";
+import { Card } from "@/components/ui/card";
+import { Badge, SeverityBadge, StatusBadge } from "@/components/ui/badge";
+import { cn, formatDate, humanize } from "@/lib/utils";
+
+export const metadata = { title: "Monitoring" };
+
+const DRIFT_COPY: Record<string, string> = {
+  POLICY_DRIFT: "Practice diverging from the written policy",
+  DATA_DRIFT: "Change in the quality or mix of incoming data",
+  DISPARITY_DRIFT: "Change in outcome gaps between protected groups",
+};
 
 export default async function MonitoringPage() {
   const alerts = await getDriftAlerts();
-  const newAlerts = alerts.filter((a) => a.status === "NEW");
+  const open = alerts.filter((a) => a.status !== "RESOLVED");
 
   return (
-    <div>
-      <PageHeader title="Continuous Monitoring" description="Policy, data, and disparity drift detection (Spec §4.L)">
-        <RunDriftButton />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Civil rights analytics"
+        authority="Spec §4.L · continuous monitoring"
+        title="Monitoring"
+        description="Screening systems drift. FairAudit watches for policy, data, and disparity drift daily and turns every signal into an alert that must be acknowledged and resolved on the record."
+      >
+        <PreviewGate label="Full access required">
+          <RunDriftButton />
+        </PreviewGate>
       </PageHeader>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">New Alerts</p><p className="text-2xl font-bold">{newAlerts.length}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Total Alerts</p><p className="text-2xl font-bold">{alerts.length}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Resolved</p><p className="text-2xl font-bold">{alerts.filter((a) => a.status === "RESOLVED").length}</p></div>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="New" value={alerts.filter((a) => a.status === "NEW").length} icon={BellRing} tone={alerts.some((a) => a.status === "NEW") ? "danger" : "default"} />
+        <StatCard label="Open" value={open.length} icon={AlertTriangle} tone={open.length ? "warning" : "default"} />
+        <StatCard label="Resolved" value={alerts.filter((a) => a.status === "RESOLVED").length} icon={CheckCircle2} tone="success" />
       </div>
 
       {alerts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-          <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-          <p className="text-muted-foreground">No drift alerts. Run detection to check for drift.</p>
-        </div>
+        <EmptyState icon={Activity} title="No alerts" description="Drift detection runs daily. You can also run it on demand." />
       ) : (
         <div className="space-y-3">
           {alerts.map((alert) => (
-            <div key={alert.id} className={`rounded-lg border p-4 ${alert.status === "NEW" ? "border-l-4 border-l-orange-400" : ""}`}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className={`h-4 w-4 ${alert.severity === "CRITICAL" ? "text-red-500" : "text-orange-500"}`} />
-                  <span className="font-medium">{alert.title}</span>
+            <Card key={alert.id} className={cn("p-5", alert.status === "NEW" && "border-l-4 border-l-rose-500")}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold">{alert.title}</h3>
+                    <SeverityBadge severity={alert.severity} />
+                    <StatusBadge status={alert.status} />
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {humanize(alert.driftType)} — {DRIFT_COPY[alert.driftType] ?? ""} · detected {formatDate(alert.detectedAt)}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${getSeverityColor(alert.severity)}`}>{alert.severity}</span>
-                  <span className="text-xs text-muted-foreground">{humanize(alert.driftType)}</span>
-                </div>
+                {alert.status !== "RESOLVED" && (
+                  <PreviewGate label="Full access required">
+                    <AlertActions alertId={alert.id} status={alert.status} />
+                  </PreviewGate>
+                )}
               </div>
-              <p className="text-sm text-muted-foreground">{alert.description}</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{alert.description}</p>
               {alert.baselineValue != null && alert.currentValue != null && (
-                <p className="text-xs text-muted-foreground mt-1">Baseline: {alert.baselineValue.toFixed(3)} → Current: {alert.currentValue.toFixed(3)} (deviation: {alert.deviationPct?.toFixed(1)}%)</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <Badge>Baseline {alert.baselineValue.toFixed(3)}</Badge>
+                  <Badge tone="warning">Current {alert.currentValue.toFixed(3)}</Badge>
+                  {alert.deviationPct != null && <Badge tone="danger">{alert.deviationPct.toFixed(1)}% deviation</Badge>}
+                  {alert.threshold != null && <Badge>Threshold {alert.threshold}%</Badge>}
+                </div>
               )}
-              <p className="text-xs text-muted-foreground mt-1">{formatDate(alert.detectedAt)} | Status: {humanize(alert.status)}</p>
-            </div>
+              {alert.resolution && (
+                <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  <span className="font-medium">Resolution: </span>
+                  {alert.resolution}
+                </p>
+              )}
+            </Card>
           ))}
         </div>
       )}

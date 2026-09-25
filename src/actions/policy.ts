@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import { CreatePolicySchema, type CreatePolicyInput } from "@/lib/validators/policy";
 import { callLLMJson } from "@/lib/llm/client";
 import { POLICY_PARSER_SYSTEM, buildPolicyParserPrompt } from "@/lib/llm/prompts";
@@ -18,6 +19,9 @@ export async function createPolicy(input: CreatePolicyInput): Promise<ActionResu
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message };
 
   const { propertyId, name, jurisdictionId, rules } = parsed.data;
+
+  const property = await prisma.property.findFirst({ where: { id: propertyId, organizationId: orgId }, select: { id: true } });
+  if (!property) return { success: false, error: "Property not found" };
 
   // Get latest version for this property
   const latest = await prisma.screeningPolicy.findFirst({
@@ -43,7 +47,15 @@ export async function createPolicy(input: CreatePolicyInput): Promise<ActionResu
     },
   });
 
-  revalidatePath(`/dashboard/properties/${propertyId}/policy`);
+  await recordAudit({
+    tableName: "ScreeningPolicy",
+    recordId: policy.id,
+    action: "POLICY_DRAFTED",
+    after: { name, version: policy.version, ruleCount: rules.length },
+    metadata: { propertyId },
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`, "layout");
   return { success: true, data: { id: policy.id } };
 }
 
@@ -52,9 +64,10 @@ export async function publishPolicy(policyId: string): Promise<ActionResult> {
   if (denied) return denied;
   const { orgId } = await getAuthContext();
 
-  const policy = await prisma.screeningPolicy.findFirstOrThrow({
+  const policy = await prisma.screeningPolicy.findFirst({
     where: { id: policyId, organizationId: orgId },
   });
+  if (!policy) return { success: false, error: "Policy not found" };
 
   // Deactivate all other policies for this property
   await prisma.screeningPolicy.updateMany({
@@ -68,7 +81,16 @@ export async function publishPolicy(policyId: string): Promise<ActionResult> {
     data: { isActive: true, publishedAt: new Date() },
   });
 
-  revalidatePath(`/dashboard/properties/${policy.propertyId}/policy`);
+  await recordAudit({
+    tableName: "ScreeningPolicy",
+    recordId: policyId,
+    action: "POLICY_PUBLISHED",
+    after: { name: policy.name, version: policy.version },
+    metadata: { propertyId: policy.propertyId },
+  });
+
+  revalidatePath(`/dashboard/properties/${policy.propertyId}`, "layout");
+  revalidatePath("/dashboard/properties");
   return { success: true };
 }
 
@@ -94,6 +116,7 @@ export async function parseNaturalLanguagePolicy(
     );
     return { success: true, data: Array.isArray(rules) ? rules : [] };
   } catch (error) {
-    return { success: false, error: `Failed to parse policy: ${error}` };
+    console.error("Policy parsing failed:", error);
+    return { success: false, error: "The policy could not be parsed. Try rephrasing, or add rules manually." };
   }
 }

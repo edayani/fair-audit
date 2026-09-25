@@ -1,48 +1,77 @@
+import Link from "next/link";
+import { Building2, CheckCircle2, CircleDashed, FileText, MapPin, Plus } from "lucide-react";
 import { getProperties } from "@/actions/property";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
-import Link from "next/link";
-import { Building2, Plus, FileText } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+export const metadata = { title: "Properties" };
 
 export default async function PropertiesPage() {
   const properties = await getProperties();
 
   return (
     <div>
-      <PageHeader title="Properties" description="Manage properties and their screening policies">
-        <Link href="/dashboard/properties/new" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4" /> Add Property
+      <PageHeader
+        eyebrow="Workspace"
+        title="Properties"
+        description="Each property carries its own published, versioned screening policy — so every determination is measured against a written standard."
+      >
+        <Link href="/dashboard/properties/new" className={buttonVariants()}>
+          <Plus />
+          Add property
         </Link>
       </PageHeader>
 
       {properties.length === 0 ? (
-        <EmptyState title="No properties yet" description="Add your first property to start configuring screening policies.">
-          <Link href="/dashboard/properties/new" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            <Plus className="h-4 w-4" /> Add Property
+        <EmptyState icon={Building2} title="No properties yet" description="Add your first property, then publish a screening policy for it.">
+          <Link href="/dashboard/properties/new" className={buttonVariants()}>
+            <Plus />
+            Add property
           </Link>
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {properties.map((property) => (
-            <Link key={property.id} href={`/dashboard/properties/${property.id}`} className="rounded-lg border bg-card p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-3">
-                <Building2 className="h-8 w-8 text-primary" />
-                {property.screeningPolicies.length > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                    Policy Active
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {properties.map((property) => {
+            const policy = property.screeningPolicies[0];
+            return (
+              <Link
+                key={property.id}
+                href={`/dashboard/properties/${property.id}`}
+                className="group flex flex-col rounded-xl border bg-card p-5 transition-all hover:-translate-y-px hover:border-primary/25 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-ink text-white">
+                    <Building2 className="size-5" />
+                  </div>
+                  {policy ? (
+                    <Badge tone="success">
+                      <CheckCircle2 />
+                      Policy v{policy.version}
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning">
+                      <CircleDashed />
+                      No published policy
+                    </Badge>
+                  )}
+                </div>
+                <h3 className="mt-4 font-serif text-lg font-semibold leading-snug group-hover:text-primary">{property.name}</h3>
+                <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
+                  <MapPin className="mt-0.5 size-3.5 shrink-0" />
+                  {[property.address, property.city, property.state].filter(Boolean).join(", ") || "No address on file"}
+                </p>
+                <div className="mt-auto flex items-center gap-4 border-t pt-4 text-sm text-muted-foreground [margin-top:1.25rem]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText className="size-3.5" />
+                    {property._count.applications} applications
                   </span>
-                )}
-              </div>
-              <h3 className="font-semibold mb-1">{property.name}</h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                {[property.address, property.city, property.state].filter(Boolean).join(", ") || "No address"}
-              </p>
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <FileText className="h-3.5 w-3.5" />
-                <span>{property._count.applications} applications</span>
-              </div>
-            </Link>
-          ))}
+                  {property.unitCount != null && <span>{property.unitCount} units</span>}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

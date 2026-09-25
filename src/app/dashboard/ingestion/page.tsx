@@ -1,48 +1,73 @@
+import Link from "next/link";
+import { AlertTriangle, Database, FileWarning, Upload, Waypoints } from "lucide-react";
 import { getIngestionStats } from "@/actions/ingestion";
 import { PageHeader } from "@/components/shared/page-header";
-import Link from "next/link";
-import { Upload, Database, AlertTriangle } from "lucide-react";
+import { StatCard } from "@/components/shared/stat-card";
+import { Card, CardContent, CardHeaderRow } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { humanize } from "@/lib/utils";
+
+export const metadata = { title: "Data intake" };
+
+function Breakdown({ entries }: { entries: Array<[string, number]> }) {
+  const max = Math.max(1, ...entries.map(([, n]) => n));
+  if (entries.length === 0) return <p className="text-sm text-muted-foreground">No records yet.</p>;
+  return (
+    <div className="space-y-3">
+      {entries
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, count]) => (
+          <div key={label}>
+            <div className="mb-1 flex justify-between text-sm">
+              <span>{label}</span>
+              <span className="font-medium tabular">{count}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${(count / max) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
 
 export default async function IngestionPage() {
   const stats = await getIngestionStats();
 
   return (
-    <div>
-      <PageHeader title="Data Ingestion" description="Screening data normalization and quality (Spec §4.B)">
-        <Link href="/dashboard/ingestion/upload" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-          <Upload className="h-4 w-4" /> Upload Data
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Adjudication"
+        authority="FCRA § 607(b) · maximum possible accuracy"
+        title="Data intake"
+        description="Consumer-report data normalized from every vendor into one schema, with quality checks that quarantine stale, mismatched, or incomplete records before they can affect anyone."
+      >
+        <Link href="/dashboard/ingestion/upload" className={buttonVariants()}>
+          <Upload />
+          Ingest vendor data
         </Link>
       </PageHeader>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Total Records</p><p className="text-2xl font-bold">{stats.total}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Quarantined</p><p className="text-2xl font-bold text-yellow-600">{stats.quarantined}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Missing Disposition</p><p className="text-2xl font-bold text-red-600">{stats.missingDisposition}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Vendors</p><p className="text-2xl font-bold">{Object.keys(stats.byVendor).length}</p></div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard label="Records on file" value={stats.total} icon={Database} />
+        <StatCard label="Quarantined" value={stats.quarantined} icon={AlertTriangle} tone={stats.quarantined ? "warning" : "default"} />
+        <StatCard label="Missing disposition" value={stats.missingDisposition} icon={FileWarning} tone={stats.missingDisposition ? "danger" : "default"} hint="Criminal records without a final disposition" />
+        <StatCard label="Vendors" value={Object.keys(stats.byVendor).length} icon={Waypoints} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-lg border bg-card p-6">
-          <h3 className="font-semibold mb-3 flex items-center gap-2"><Database className="h-5 w-5" /> Records by Type</h3>
-          {Object.entries(stats.byType).map(([type, count]) => (
-            <div key={type} className="flex items-center justify-between py-2 border-b last:border-0">
-              <span className="text-sm">{humanize(type)}</span>
-              <span className="font-medium">{count as number}</span>
-            </div>
-          ))}
-          {Object.keys(stats.byType).length === 0 && <p className="text-sm text-muted-foreground">No records</p>}
-        </div>
-        <div className="rounded-lg border bg-card p-6">
-          <h3 className="font-semibold mb-3 flex items-center gap-2"><Upload className="h-5 w-5" /> Records by Vendor</h3>
-          {Object.entries(stats.byVendor).map(([vendor, count]) => (
-            <div key={vendor} className="flex items-center justify-between py-2 border-b last:border-0">
-              <span className="text-sm">{vendor}</span>
-              <span className="font-medium">{count as number}</span>
-            </div>
-          ))}
-          {Object.keys(stats.byVendor).length === 0 && <p className="text-sm text-muted-foreground">No vendors</p>}
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeaderRow title="Records by type" />
+          <CardContent>
+            <Breakdown entries={Object.entries(stats.byType).map(([k, v]) => [humanize(k), v as number])} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeaderRow title="Records by vendor" />
+          <CardContent>
+            <Breakdown entries={Object.entries(stats.byVendor).map(([k, v]) => [k, v as number])} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -1,80 +1,196 @@
 "use client";
 // Spec §4.I — Three challenge types: Accuracy, Relevance, Mitigation
 import { useState, useTransition } from "react";
-import { submitChallenge } from "@/actions/challenge";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Scale, XCircle } from "lucide-react";
+import { resolveChallenge, submitChallenge } from "@/actions/challenge";
 import { toast } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { Field, Select, Textarea } from "@/components/ui/form";
+import { cn, humanize } from "@/lib/utils";
 
-export function ChallengeForm({ applicationId }: { applicationId: string }) {
+const TYPES = [
+  { value: "ACCURACY", title: "Dispute accuracy", body: "The record is wrong, incomplete, or belongs to someone else." },
+  { value: "RELEVANCE", title: "Challenge relevance", body: "The record is accurate but has no bearing on tenancy." },
+  { value: "MITIGATION", title: "Offer mitigation", body: "It happened, but later circumstances show it is not predictive." },
+] as const;
+
+type ChallengeType = (typeof TYPES)[number]["value"];
+
+export function ChallengeForm({
+  applicationId,
+  records,
+}: {
+  applicationId: string;
+  records: Array<{ id: string; recordType: string; vendorName: string }>;
+}) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [type, setType] = useState<"ACCURACY" | "RELEVANCE" | "MITIGATION">("ACCURACY");
+  const [type, setType] = useState<ChallengeType>("ACCURACY");
+  const [recordIds, setRecordIds] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [circumstanceType, setCircumstanceType] = useState("");
   const [mitigatingEvidence, setMitigatingEvidence] = useState("");
 
+  function toggleRecord(id: string) {
+    setRecordIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (recordIds.length === 0) {
+      toast.error("Select at least one record the challenge concerns.");
+      return;
+    }
     startTransition(async () => {
       const result = await submitChallenge({
-        applicationId, type, description, recordIds: ["all"],
-        ...(type === "MITIGATION" && { circumstanceType, mitigatingEvidence }),
+        applicationId,
+        type,
+        description,
+        recordIds,
+        ...(type === "MITIGATION" && { circumstanceType: circumstanceType || undefined, mitigatingEvidence: mitigatingEvidence || undefined }),
       });
       if (result.success) {
-        toast.success("Challenge submitted for review");
-        setDescription(""); setCircumstanceType(""); setMitigatingEvidence("");
-      } else { toast.error(result.error ?? "Failed to submit"); }
+        toast.success("Challenge filed and routed for a written resolution");
+        setDescription("");
+        setCircumstanceType("");
+        setMitigatingEvidence("");
+        setRecordIds([]);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to submit");
+      }
     });
   }
 
   return (
-    <div className="rounded-lg border bg-card p-6">
-      <h3 className="text-lg font-semibold mb-4">Submit New Challenge</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-2">Challenge Type</label>
-          <div className="flex gap-2">
-            {(["ACCURACY", "RELEVANCE", "MITIGATION"] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                className={`px-4 py-2 rounded-md text-sm border transition-colors ${type === t ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-                {t === "ACCURACY" ? "Dispute Accuracy" : t === "RELEVANCE" ? "Challenge Relevance" : "Provide Mitigation"}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {type === "ACCURACY" ? "This record is wrong or inaccurate." : type === "RELEVANCE" ? "This record is accurate but should not affect the decision." : "This happened, but here is why it is not predictive now."}
-          </p>
+    <form onSubmit={handleSubmit} className="rounded-xl border bg-card">
+      <div className="border-b px-5 py-4 sm:px-6">
+        <h3 className="text-[15px] font-semibold">File a challenge on the applicant&apos;s behalf</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">Notice and a meaningful opportunity to be heard — every challenge requires a written resolution.</p>
+      </div>
+      <div className="space-y-5 px-5 py-5 sm:px-6">
+        <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Challenge type">
+          {TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              role="radio"
+              aria-checked={type === t.value}
+              onClick={() => setType(t.value)}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors",
+                type === t.value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent"
+              )}
+            >
+              <span className="block text-sm font-medium">{t.title}</span>
+              <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{t.body}</span>
+            </button>
+          ))}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} required rows={3} placeholder="Explain your challenge in detail..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-        </div>
+        <Field label="Records at issue" required>
+          {records.length === 0 ? (
+            <p className="text-sm text-muted-foreground">This application has no screening records to challenge.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {records.map((r) => (
+                <label
+                  key={r.id}
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                    recordIds.includes(r.id) ? "border-primary bg-primary/5" : "hover:bg-accent"
+                  )}
+                >
+                  <input type="checkbox" className="size-3.5 accent-[var(--primary)]" checked={recordIds.includes(r.id)} onChange={() => toggleRecord(r.id)} />
+                  {humanize(r.recordType)} <span className="text-xs text-muted-foreground">· {r.vendorName}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </Field>
+
+        <Field label="Applicant's statement" required>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} minLength={10} required placeholder="In the applicant's words, what is disputed and why…" />
+        </Field>
 
         {type === "MITIGATION" && (
-          <>
-            <div>
-              <label className="block text-sm font-medium mb-1">Circumstance Type</label>
-              <select value={circumstanceType} onChange={(e) => setCircumstanceType(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm">
-                <option value="">Select...</option>
-                <option value="job_loss">Job Loss</option>
-                <option value="medical">Medical Emergency</option>
-                <option value="domestic_violence">Domestic Violence</option>
-                <option value="identity_theft">Identity Theft</option>
-                <option value="rehabilitation">Rehabilitation Program</option>
-                <option value="education">Education/Training Completion</option>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Circumstance">
+              <Select value={circumstanceType} onChange={(e) => setCircumstanceType(e.target.value)}>
+                <option value="">Select…</option>
+                <option value="domestic_violence">Domestic violence (VAWA protections may apply)</option>
+                <option value="medical">Medical emergency</option>
+                <option value="job_loss">Job loss or income interruption</option>
+                <option value="homelessness">Period of homelessness</option>
+                <option value="identity_theft">Identity theft</option>
+                <option value="rehabilitation">Rehabilitation or treatment program</option>
                 <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Mitigating Evidence</label>
-              <textarea value={mitigatingEvidence} onChange={(e) => setMitigatingEvidence(e.target.value)} rows={3} placeholder="Describe how circumstances have changed..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-            </div>
-          </>
+              </Select>
+            </Field>
+            <Field label="Mitigating evidence">
+              <Textarea value={mitigatingEvidence} onChange={(e) => setMitigatingEvidence(e.target.value)} rows={2} placeholder="Documents or facts offered…" />
+            </Field>
+          </div>
         )}
 
-        <button type="submit" disabled={isPending} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-          {isPending ? "Submitting..." : "Submit Challenge"}
-        </button>
-      </form>
+        <div className="flex justify-end">
+          <Button type="submit" loading={isPending}>
+            File challenge
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+export function ChallengeResolver({ challengeId }: { challengeId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [resolution, setResolution] = useState("");
+  const [open, setOpen] = useState(false);
+
+  function resolve(status: "RESOLVED_ACCEPTED" | "RESOLVED_REJECTED") {
+    if (!resolution.trim()) {
+      toast.error("Write the resolution before deciding the challenge.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await resolveChallenge(challengeId, status, resolution);
+      if (result.success) {
+        toast.success(status === "RESOLVED_ACCEPTED" ? "Challenge sustained" : "Challenge denied");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to resolve");
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Scale />
+        Resolve
+      </Button>
+    );
+  }
+
+  return (
+    <div className="mt-3 w-full space-y-2 rounded-lg border bg-muted/40 p-3">
+      <Textarea value={resolution} onChange={(e) => setResolution(e.target.value)} rows={2} placeholder="Written resolution explaining the finding…" />
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => resolve("RESOLVED_REJECTED")} disabled={isPending}>
+          <XCircle />
+          Deny challenge
+        </Button>
+        <Button variant="success" size="sm" onClick={() => resolve("RESOLVED_ACCEPTED")} loading={isPending}>
+          {!isPending && <CheckCircle2 />}
+          Sustain challenge
+        </Button>
+      </div>
     </div>
   );
 }

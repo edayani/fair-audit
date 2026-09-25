@@ -1,20 +1,32 @@
 "use client";
-// Spec §4.E — LLM use case 3: proxy-risk flagging, human approval required
+// Spec §4.E — proxy-risk detection across registered features
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Radar } from "lucide-react";
 import { runProxyDetection } from "@/actions/proxy-risk";
 import { toast } from "@/lib/toast";
-import { Layers } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function RunProxyDetectionButton() {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function handleRun() {
+    startTransition(async () => {
+      const result = await runProxyDetection();
+      if (result.success) {
+        toast.success(`Detection complete — ${result.data?.flagged ?? 0} feature(s) flagged as potential proxies`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Detection failed");
+      }
+    });
+  }
 
   return (
-    <button onClick={() => startTransition(async () => {
-      const result = await runProxyDetection();
-      if (result.success) toast.success(`Proxy detection complete: ${result.data?.flagged} features flagged`);
-      else toast.error(result.error ?? "Failed");
-    })} disabled={isPending} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-      <Layers className="h-4 w-4" /> {isPending ? "Detecting..." : "Run Detection"}
-    </button>
+    <Button onClick={handleRun} loading={isPending}>
+      {!isPending && <Radar />}
+      Run proxy detection
+    </Button>
   );
 }

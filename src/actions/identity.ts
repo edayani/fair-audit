@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { computeIdentityConfidence, assessRecordQuality } from "@/lib/engines/identity";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function resolveIdentity(applicationId: string): Promise<ActionResult<{ processed: number; quarantined: number }>> {
@@ -12,10 +13,14 @@ export async function resolveIdentity(applicationId: string): Promise<ActionResu
   if (denied) return denied;
   const { orgId } = await getAuthContext();
 
-  const application = await prisma.application.findFirstOrThrow({
+  const application = await prisma.application.findFirst({
     where: { id: applicationId, organizationId: orgId },
     include: { applicant: true, screeningRecords: true },
   });
+  if (!application) return { success: false, error: "Application not found" };
+  if (application.screeningRecords.length === 0) {
+    return { success: false, error: "No screening records to evaluate. Ingest vendor data first." };
+  }
 
   let quarantined = 0;
 
@@ -42,6 +47,14 @@ export async function resolveIdentity(applicationId: string): Promise<ActionResu
     if (shouldQuarantine) quarantined++;
   }
 
-  revalidatePath(`/dashboard/applications/${applicationId}/records`);
+  await recordAudit({
+    tableName: "ScreeningRecord",
+    recordId: applicationId,
+    action: "IDENTITY_RESOLUTION",
+    after: { processed: application.screeningRecords.length, quarantined },
+    metadata: { applicationId },
+  });
+
+  revalidatePath(`/dashboard/applications/${applicationId}`, "layout");
   return { success: true, data: { processed: application.screeningRecords.length, quarantined } };
 }

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { ClerkProvider, SignIn } from "@clerk/nextjs";
+import { AuthShell } from "@/components/marketing/auth-shell";
+import { clerkAuthAppearance } from "@/lib/clerk-appearance";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: "Sign in to your FairAudit compliance workspace.",
+};
 
 export default function SignInPage() {
   return (
@@ -9,21 +17,16 @@ export default function SignInPage() {
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/dashboard"
     >
-      <div className="flex min-h-screen items-center justify-center">
+      <AuthShell mode="sign-in">
         <SignIn
           path="/sign-in"
           routing="path"
           signUpUrl="/sign-up"
           fallbackRedirectUrl="/dashboard"
           oauthFlow="redirect"
-          appearance={{
-            elements: {
-              socialButtonsBlockButton: "hidden",
-              dividerRow: "hidden",
-            },
-          }}
+          appearance={clerkAuthAppearance}
         />
-      </div>
+      </AuthShell>
     </ClerkProvider>
   );
 }

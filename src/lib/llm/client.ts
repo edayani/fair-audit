@@ -4,9 +4,13 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type LLMProvider = "anthropic";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY ?? "",
-});
+const MODEL = "claude-opus-5";
+
+let client: Anthropic | null = null;
+function getClient() {
+  client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return client;
+}
 
 /**
  * Call the LLM with a system prompt and user message.
@@ -25,15 +29,25 @@ export async function callLLM(
     });
   }
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: options?.maxTokens ?? 2048,
+  // Server-side refusal fallback: if the primary model declines, the API retries
+  // the same request on a fallback model within the same call.
+  const response = await getClient().beta.messages.create({
+    model: MODEL,
+    max_tokens: options?.maxTokens ?? 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  return textBlock?.text ?? "";
+  if (response.stop_reason === "refusal") {
+    throw new Error("The model declined this request.");
+  }
+
+  return response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
 }
 
 /**

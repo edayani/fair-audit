@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Scale } from "lucide-react";
 import { submitBurdenShiftingAnalysis } from "@/actions/fairness";
 import { toast } from "@/lib/toast";
-import { Scale } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Field, Select, Textarea } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+import { cn, humanize } from "@/lib/utils";
 
 interface BurdenShiftingAnalysis {
   id: string;
@@ -15,6 +20,7 @@ interface BurdenShiftingAnalysis {
   legitimateObjectiveNotes: string | null;
   conclusion: string | null;
   analystNotes: string | null;
+  analyzedBy?: string;
 }
 
 interface Props {
@@ -22,228 +28,174 @@ interface Props {
   protectedClass: string;
   impactRatio: number;
   existing?: BurdenShiftingAnalysis | null;
+  canEdit: boolean;
 }
 
-function YesNoToggle({
-  value,
-  onChange,
-  readOnly,
-}: {
-  value: boolean | null;
-  onChange: (v: boolean) => void;
-  readOnly?: boolean;
-}) {
-  if (readOnly) {
-    return (
-      <span className={value === true ? "text-green-600 font-medium" : value === false ? "text-red-600 font-medium" : "text-muted-foreground"}>
-        {value === true ? "Yes" : value === false ? "No" : "Not assessed"}
-      </span>
-    );
-  }
+const CONCLUSIONS: Record<string, { label: string; tone: "success" | "danger" | "warning" }> = {
+  JUSTIFIED: { label: "Practice justified — no less discriminatory alternative", tone: "success" },
+  UNJUSTIFIED: { label: "Unjustified — revise the policy", tone: "danger" },
+  NEEDS_FURTHER_REVIEW: { label: "Needs further review", tone: "warning" },
+};
+
+function YesNo({ value, onChange }: { value: boolean | null; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex gap-2">
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={`px-3 py-1 rounded-md text-sm border transition-colors ${value === true ? "bg-green-600 text-white border-green-600" : "hover:bg-muted"}`}
-      >
-        Yes
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={`px-3 py-1 rounded-md text-sm border transition-colors ${value === false ? "bg-red-600 text-white border-red-600" : "hover:bg-muted"}`}
-      >
-        No
-      </button>
+    <div className="flex gap-1.5" role="radiogroup">
+      {[true, false].map((v) => (
+        <button
+          key={String(v)}
+          type="button"
+          role="radio"
+          aria-checked={value === v}
+          onClick={() => onChange(v)}
+          className={cn(
+            "rounded-lg border px-3 py-1 text-xs font-medium transition-colors",
+            value === v ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
+          )}
+        >
+          {v ? "Yes" : "No"}
+        </button>
+      ))}
     </div>
   );
 }
 
-export function BurdenShiftingPanel({ disparityReportId, protectedClass, impactRatio, existing }: Props) {
+export function BurdenShiftingPanel({ disparityReportId, protectedClass, impactRatio, existing, canEdit }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const readOnly = !!existing;
-
-  const [isFaciallyNeutral, setIsFaciallyNeutral] = useState<boolean | null>(existing?.isFaciallyNeutral ?? null);
-  const [facialNeutralityNotes, setFacialNeutralityNotes] = useState(existing?.facialNeutralityNotes ?? "");
-  const [lessDiscriminatoryAltExists, setLessDiscriminatoryAltExists] = useState<boolean | null>(existing?.lessDiscriminatoryAltExists ?? null);
-  const [lessDiscriminatoryAltNotes, setLessDiscriminatoryAltNotes] = useState(existing?.lessDiscriminatoryAltNotes ?? "");
-  const [hasLegitimateObjective, setHasLegitimateObjective] = useState<boolean | null>(existing?.hasLegitimateObjective ?? null);
-  const [legitimateObjectiveNotes, setLegitimateObjectiveNotes] = useState(existing?.legitimateObjectiveNotes ?? "");
-  const [conclusion, setConclusion] = useState(existing?.conclusion ?? "");
-  const [analystNotes, setAnalystNotes] = useState(existing?.analystNotes ?? "");
-
-  const [openProng, setOpenProng] = useState<number | null>(null);
-
-  function toggleProng(n: number) {
-    setOpenProng(openProng === n ? null : n);
-  }
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    isFaciallyNeutral: existing?.isFaciallyNeutral ?? null,
+    facialNeutralityNotes: existing?.facialNeutralityNotes ?? "",
+    hasLegitimateObjective: existing?.hasLegitimateObjective ?? null,
+    legitimateObjectiveNotes: existing?.legitimateObjectiveNotes ?? "",
+    lessDiscriminatoryAltExists: existing?.lessDiscriminatoryAltExists ?? null,
+    lessDiscriminatoryAltNotes: existing?.lessDiscriminatoryAltNotes ?? "",
+    conclusion: existing?.conclusion ?? "",
+    analystNotes: existing?.analystNotes ?? "",
+  });
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.conclusion) {
+      toast.error("Select a conclusion for the analysis.");
+      return;
+    }
     startTransition(async () => {
       const result = await submitBurdenShiftingAnalysis(disparityReportId, {
         protectedClass,
         impactRatio,
-        isFaciallyNeutral: isFaciallyNeutral ?? undefined,
-        facialNeutralityNotes: facialNeutralityNotes || undefined,
-        lessDiscriminatoryAltExists: lessDiscriminatoryAltExists ?? undefined,
-        lessDiscriminatoryAltNotes: lessDiscriminatoryAltNotes || undefined,
-        hasLegitimateObjective: hasLegitimateObjective ?? undefined,
-        legitimateObjectiveNotes: legitimateObjectiveNotes || undefined,
-        conclusion: conclusion || undefined,
-        analystNotes: analystNotes || undefined,
+        isFaciallyNeutral: form.isFaciallyNeutral ?? undefined,
+        facialNeutralityNotes: form.facialNeutralityNotes || undefined,
+        hasLegitimateObjective: form.hasLegitimateObjective ?? undefined,
+        legitimateObjectiveNotes: form.legitimateObjectiveNotes || undefined,
+        lessDiscriminatoryAltExists: form.lessDiscriminatoryAltExists ?? undefined,
+        lessDiscriminatoryAltNotes: form.lessDiscriminatoryAltNotes || undefined,
+        conclusion: form.conclusion,
+        analystNotes: form.analystNotes || undefined,
       });
       if (result.success) {
-        toast.success("Burden-shifting analysis saved");
+        toast.success("Burden-shifting analysis recorded");
+        setEditing(false);
+        router.refresh();
       } else {
         toast.error(result.error ?? "Failed to save analysis");
       }
     });
   }
 
-  return (
-    <div className="border-l-4 border-amber-500 rounded-lg border bg-card p-6 mt-4">
-      <div className="flex items-center gap-2 mb-1">
-        <Scale className="h-5 w-5 text-amber-600" />
-        <h4 className="font-semibold">HUD Burden-Shifting Analysis</h4>
+  const header = (
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex items-start gap-2">
+        <Scale className="mt-0.5 size-4 text-brass" />
+        <div>
+          <p className="text-sm font-semibold">Burden-shifting analysis · {humanize(protectedClass)}</p>
+          <p className="text-[11px] italic text-muted-foreground">
+            24 C.F.R. § 100.500(c); Tex. Dep&apos;t of Hous. &amp; Cmty. Affs. v. Inclusive Cmtys. Project, Inc., 576 U.S. 519 (2015)
+          </p>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
-        24 CFR &sect; 100.500; <em>Texas Dept. of Housing v. Inclusive Communities Project</em>, 576 U.S. 519 (2015)
-      </p>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Prong 1 */}
-        <div className="border rounded-md">
-          <button type="button" onClick={() => toggleProng(1)} className="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors">
-            <span className="font-medium text-sm">Prong 1: Facial Neutrality</span>
-            <span className="text-xs text-muted-foreground">{openProng === 1 ? "Collapse" : "Expand"}</span>
-          </button>
-          {openProng === 1 && (
-            <div className="p-3 pt-0 space-y-3">
-              <p className="text-sm">Is the challenged policy facially neutral (i.e., it does not explicitly reference a protected class)?</p>
-              <YesNoToggle value={isFaciallyNeutral} onChange={setIsFaciallyNeutral} readOnly={readOnly} />
-              {!readOnly ? (
-                <textarea
-                  value={facialNeutralityNotes}
-                  onChange={(e) => setFacialNeutralityNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Notes on facial neutrality..."
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                />
-              ) : facialNeutralityNotes ? (
-                <p className="text-sm text-muted-foreground">{facialNeutralityNotes}</p>
-              ) : null}
-              <p className="text-xs text-muted-foreground italic">
-                A facially neutral policy may still violate the FHA if it has a discriminatory effect. &mdash; <em>Inclusive Communities</em>, 576 U.S. at 524
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Prong 2 */}
-        <div className="border rounded-md">
-          <button type="button" onClick={() => toggleProng(2)} className="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors">
-            <span className="font-medium text-sm">Prong 2: Less Discriminatory Alternative</span>
-            <span className="text-xs text-muted-foreground">{openProng === 2 ? "Collapse" : "Expand"}</span>
-          </button>
-          {openProng === 2 && (
-            <div className="p-3 pt-0 space-y-3">
-              <p className="text-sm">Does a less discriminatory alternative exist that would serve the same legitimate objective?</p>
-              <YesNoToggle value={lessDiscriminatoryAltExists} onChange={setLessDiscriminatoryAltExists} readOnly={readOnly} />
-              {!readOnly ? (
-                <textarea
-                  value={lessDiscriminatoryAltNotes}
-                  onChange={(e) => setLessDiscriminatoryAltNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Notes on less discriminatory alternatives..."
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                />
-              ) : lessDiscriminatoryAltNotes ? (
-                <p className="text-sm text-muted-foreground">{lessDiscriminatoryAltNotes}</p>
-              ) : null}
-              <p className="text-xs text-muted-foreground italic">
-                The burden shifts to the plaintiff to show that a less discriminatory alternative is available. &mdash; 24 CFR &sect; 100.500(c)(3)
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Prong 3 */}
-        <div className="border rounded-md">
-          <button type="button" onClick={() => toggleProng(3)} className="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors">
-            <span className="font-medium text-sm">Prong 3: Legitimate Business Objective</span>
-            <span className="text-xs text-muted-foreground">{openProng === 3 ? "Collapse" : "Expand"}</span>
-          </button>
-          {openProng === 3 && (
-            <div className="p-3 pt-0 space-y-3">
-              <p className="text-sm">Does the policy serve a substantial, legitimate, nondiscriminatory business objective?</p>
-              <YesNoToggle value={hasLegitimateObjective} onChange={setHasLegitimateObjective} readOnly={readOnly} />
-              {!readOnly ? (
-                <textarea
-                  value={legitimateObjectiveNotes}
-                  onChange={(e) => setLegitimateObjectiveNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Notes on legitimate business objective..."
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                />
-              ) : legitimateObjectiveNotes ? (
-                <p className="text-sm text-muted-foreground">{legitimateObjectiveNotes}</p>
-              ) : null}
-              <p className="text-xs text-muted-foreground italic">
-                The respondent must prove that the challenged practice is necessary to achieve a valid interest. &mdash; 24 CFR &sect; 100.500(c)(2)
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Conclusion */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Conclusion</label>
-          {readOnly ? (
-            <span className={`font-medium ${conclusion === "Justified" ? "text-green-600" : conclusion === "Unjustified" ? "text-red-600" : "text-yellow-600"}`}>
-              {conclusion || "Not assessed"}
-            </span>
-          ) : (
-            <select
-              value={conclusion}
-              onChange={(e) => setConclusion(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Select conclusion...</option>
-              <option value="Justified">Justified</option>
-              <option value="Unjustified">Unjustified</option>
-              <option value="Needs Further Review">Needs Further Review</option>
-            </select>
-          )}
-        </div>
-
-        {/* Analyst Notes */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Analyst Notes</label>
-          {readOnly ? (
-            <p className="text-sm text-muted-foreground">{analystNotes || "None"}</p>
-          ) : (
-            <textarea
-              value={analystNotes}
-              onChange={(e) => setAnalystNotes(e.target.value)}
-              rows={3}
-              placeholder="Additional analysis notes..."
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          )}
-        </div>
-
-        {!readOnly && (
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {isPending ? "Saving..." : "Submit Analysis"}
-          </button>
-        )}
-      </form>
+      {existing && !editing && canEdit && (
+        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+          <Pencil />
+          Supplement
+        </Button>
+      )}
     </div>
+  );
+
+  if (existing && !editing) {
+    const c = existing.conclusion ? CONCLUSIONS[existing.conclusion] : null;
+    return (
+      <div className="mt-4 space-y-3 rounded-lg border bg-muted/30 p-4">
+        {header}
+        {c && <Badge tone={c.tone}>{c.label}</Badge>}
+        <dl className="space-y-2 text-sm">
+          {[
+            { k: "Step 1 · Discriminatory effect of a facially neutral practice", yes: existing.isFaciallyNeutral, note: existing.facialNeutralityNotes },
+            { k: "Step 2 · Substantial, legitimate, nondiscriminatory interest", yes: existing.hasLegitimateObjective, note: existing.legitimateObjectiveNotes },
+            { k: "Step 3 · Less discriminatory alternative available", yes: existing.lessDiscriminatoryAltExists, note: existing.lessDiscriminatoryAltNotes },
+          ].map((row) => (
+            <div key={row.k}>
+              <dt className="text-xs font-medium text-muted-foreground">
+                {row.k}: <span className="text-foreground">{row.yes == null ? "—" : row.yes ? "Yes" : "No"}</span>
+              </dt>
+              {row.note && <dd className="mt-0.5 leading-relaxed">{row.note}</dd>}
+            </div>
+          ))}
+        </dl>
+        {existing.analyzedBy && <p className="text-xs text-muted-foreground">Analyst: {existing.analyzedBy}</p>}
+      </div>
+    );
+  }
+
+  if (!canEdit) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+        {header}
+        <p className="mt-2">A documented burden-shifting analysis is required. Full access is needed to record one.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 space-y-4 rounded-lg border border-amber-300 bg-card p-4 dark:border-amber-700/60">
+      {header}
+      <Field label="Step 1 — Is the challenged practice facially neutral, and does it cause the disparity (robust causality)?">
+        <YesNo value={form.isFaciallyNeutral} onChange={(v) => set("isFaciallyNeutral", v)} />
+        <Textarea rows={2} value={form.facialNeutralityNotes} onChange={(e) => set("facialNeutralityNotes", e.target.value)} placeholder="Identify the specific criterion and how it produces the observed disparity…" />
+      </Field>
+      <Field label="Step 2 — Is the practice necessary to achieve a substantial, legitimate, nondiscriminatory interest?">
+        <YesNo value={form.hasLegitimateObjective} onChange={(v) => set("hasLegitimateObjective", v)} />
+        <Textarea rows={2} value={form.legitimateObjectiveNotes} onChange={(e) => set("legitimateObjectiveNotes", e.target.value)} placeholder="State the interest and the evidence (not speculation) that the criterion serves it…" />
+      </Field>
+      <Field label="Step 3 — Could that interest be served by a practice with a less discriminatory effect?">
+        <YesNo value={form.lessDiscriminatoryAltExists} onChange={(v) => set("lessDiscriminatoryAltExists", v)} />
+        <Textarea rows={2} value={form.lessDiscriminatoryAltNotes} onChange={(e) => set("lessDiscriminatoryAltNotes", e.target.value)} placeholder="e.g., shorter lookback, individualized review, alternative evidence of ability to pay…" />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Conclusion" required>
+          <Select value={form.conclusion} onChange={(e) => set("conclusion", e.target.value)}>
+            <option value="">Select…</option>
+            <option value="JUSTIFIED">Justified</option>
+            <option value="UNJUSTIFIED">Unjustified — revise policy</option>
+            <option value="NEEDS_FURTHER_REVIEW">Needs further review</option>
+          </Select>
+        </Field>
+        <Field label="Analyst notes">
+          <Textarea rows={1} value={form.analystNotes} onChange={(e) => set("analystNotes", e.target.value)} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2">
+        {existing && (
+          <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={isPending}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" size="sm" loading={isPending}>
+          Record analysis
+        </Button>
+      </div>
+    </form>
   );
 }

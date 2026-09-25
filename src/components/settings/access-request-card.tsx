@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Clock, Lock, Send } from "lucide-react";
 import { submitAccessRequest } from "@/actions/access-request";
-import { Lock, CheckCircle, Clock, Send } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/form";
+import { formatDate } from "@/lib/utils";
 
 export function AccessRequestCard({
   accessTier,
@@ -14,82 +18,71 @@ export function AccessRequestCard({
   hasPendingRequest: boolean;
   requestedAt: Date | null;
 }) {
+  const router = useRouter();
   const [reason, setReason] = useState("");
-  const [isPending, setIsPending] = useState(false);
-  const [submitted, setSubmitted] = useState(hasPendingRequest);
+  const [isPending, startTransition] = useTransition();
 
   if (accessTier === "FULL") {
     return (
-      <div className="rounded-lg border bg-card p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <CheckCircle className="h-6 w-6 text-green-600" />
-          <div>
-            <h3 className="font-semibold">Full Access</h3>
-            <p className="text-sm text-muted-foreground">
-              Your organization has full access to all FairAudit features.
-            </p>
-          </div>
+      <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+        <CheckCircle2 className="mt-0.5 size-5 text-emerald-600 dark:text-emerald-400" />
+        <div>
+          <h3 className="font-semibold">Full access</h3>
+          <p className="text-sm text-muted-foreground">Your organization can record determinations, notices, overrides, and analyses to the legal record.</p>
         </div>
       </div>
     );
   }
 
-  if (submitted) {
+  if (hasPendingRequest) {
     return (
-      <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <Clock className="h-6 w-6 text-amber-600" />
-          <div>
-            <h3 className="font-semibold">Access Request Pending</h3>
-            <p className="text-sm text-muted-foreground">
-              Your request is being reviewed. You&apos;ll get full access once approved.
-              {requestedAt && (
-                <span className="block mt-1 text-xs">
-                  Submitted {new Date(requestedAt).toLocaleDateString()}
-                </span>
-              )}
-            </p>
-          </div>
+      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-900/60 dark:bg-amber-950/30">
+        <Clock className="mt-0.5 size-5 text-amber-600" />
+        <div>
+          <h3 className="font-semibold">Access request under review</h3>
+          <p className="text-sm text-muted-foreground">
+            We&apos;ll upgrade the workspace once approved.{requestedAt ? ` Submitted ${formatDate(requestedAt)}.` : ""}
+          </p>
         </div>
       </div>
     );
   }
 
-  async function handleSubmit() {
-    setIsPending(true);
-    const result = await submitAccessRequest(reason);
-    if (result.success) {
-      setSubmitted(true);
-      toast.success("Access request submitted!");
-    } else {
-      toast.error(result.error ?? "Failed to submit request");
-    }
-    setIsPending(false);
+  function handleSubmit() {
+    startTransition(async () => {
+      const result = await submitAccessRequest(reason);
+      if (result.success) {
+        toast.success("Access request submitted");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to submit request");
+      }
+    });
   }
 
   return (
-    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-6 mb-6">
+    <div className="rounded-xl border border-amber-200 bg-card p-5 dark:border-amber-900/60 sm:p-6">
       <div className="flex items-start gap-3">
-        <Lock className="h-6 w-6 text-amber-600 mt-0.5" />
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+          <Lock className="size-5" />
+        </div>
         <div className="flex-1">
-          <h3 className="font-semibold">Preview Mode</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            You&apos;re viewing FairAudit with demo data. Request full access to unlock all features.
+          <h3 className="font-semibold">Request full access</h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Preview workspaces can explore every module with sample data. Full access enables recording determinations to the
+            append-only audit trail and evidence vault.
           </p>
-          <textarea
+          <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Tell us how you plan to use FairAudit (optional)..."
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-3 min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="Tell us about your portfolio — e.g., 1,200 units across LIHTC and permanent supportive housing in Los Angeles County (optional)"
+            className="mb-3"
+            maxLength={2000}
           />
-          <button
-            onClick={handleSubmit}
-            disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            {isPending ? "Submitting..." : "Request Full Access"}
-          </button>
+          <Button onClick={handleSubmit} loading={isPending}>
+            {!isPending && <Send />}
+            Submit request
+          </Button>
         </div>
       </div>
     </div>

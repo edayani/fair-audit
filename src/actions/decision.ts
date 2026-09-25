@@ -6,14 +6,15 @@ import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { evaluateApplication } from "@/lib/engines/decision";
 import { generateReasonCodes } from "@/lib/engines/reason-codes";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function runDecision(applicationId: string): Promise<ActionResult<{ decisionId: string }>> {
-  const { orgId } = await getAuthContext();
   const denied = await requireFullAccess();
   if (denied) return denied;
+  const { orgId } = await getAuthContext();
 
-  const application = await prisma.application.findFirstOrThrow({
+  const application = await prisma.application.findFirst({
     where: { id: applicationId, organizationId: orgId },
     include: {
       screeningRecords: true,
@@ -26,12 +27,25 @@ export async function runDecision(applicationId: string): Promise<ActionResult<{
     },
   });
 
+  if (!application) return { success: false, error: "Application not found" };
+
   const org = await prisma.organization.findFirstOrThrow({ where: { id: orgId } });
   const activePolicy = application.property.screeningPolicies[0];
-  if (!activePolicy) return { success: false, error: "No active screening policy" };
+  if (!activePolicy) {
+    return { success: false, error: "This property has no published screening policy. Publish one before running the pipeline." };
+  }
 
-  // Delete existing decision if re-running
-  await prisma.decision.deleteMany({ where: { applicationId } });
+  // Re-running supersedes the prior determination; the audit log retains the history.
+  const previous = await prisma.decision.findUnique({ where: { applicationId }, select: { id: true, outcome: true } });
+  if (previous) {
+    await prisma.$transaction([
+      prisma.humanReview.deleteMany({ where: { decisionId: previous.id } }),
+      prisma.override.deleteMany({ where: { decisionId: previous.id } }),
+      prisma.individualizedAssessment.deleteMany({ where: { decisionId: previous.id } }),
+      prisma.reasonCode.deleteMany({ where: { decisionId: previous.id } }),
+      prisma.decision.delete({ where: { id: previous.id } }),
+    ]);
+  }
 
   // Run the decision engine (Spec §4.G)
   const result = evaluateApplication(
@@ -84,17 +98,23 @@ export async function runDecision(applicationId: string): Promise<ActionResult<{
     },
   });
 
-  revalidatePath(`/dashboard/applications/${applicationId}`);
-  revalidatePath("/dashboard/review-queue");
+  await recordAudit({
+    tableName: "Decision",
+    recordId: decision.id,
+    action: previous ? "RE_EVALUATE" : "EVALUATE",
+    before: previous ? { outcome: previous.outcome } : null,
+    after: { outcome: result.outcome, confidenceScore: result.confidenceScore, reasonCodes: reasonCodes.map((rc) => rc.code) },
+    metadata: { applicationId, policyId: activePolicy.id, policyVersion: activePolicy.version, complianceMode: org.complianceMode },
+  });
+
+  revalidatePath("/dashboard", "layout");
   return { success: true, data: { decisionId: decision.id } };
 }
 
 export async function getDecision(applicationId: string) {
   const { orgId } = await getAuthContext();
-  await prisma.application.findFirstOrThrow({ where: { id: applicationId, organizationId: orgId } });
-
   return prisma.decision.findFirst({
-    where: { applicationId },
+    where: { applicationId, application: { organizationId: orgId } },
     include: {
       reasonCodes: { include: { policyRule: true }, orderBy: { sortOrder: "asc" } },
       humanReview: { include: { reviewer: true } },

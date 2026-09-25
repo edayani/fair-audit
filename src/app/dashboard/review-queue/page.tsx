@@ -1,28 +1,37 @@
-import { getReviewQueue, getQueueStats } from "@/actions/review";
+import { ClipboardCheck, ShieldAlert, UserCheck } from "lucide-react";
+import { getQueueStats, getReviewQueue } from "@/actions/review";
+import { getAuthContext } from "@/lib/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { ReviewCard } from "@/components/review/review-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { ClipboardCheck, UserCheck, ArrowRight } from "lucide-react";
+import { StatCard } from "@/components/shared/stat-card";
+
+export const metadata = { title: "Review queue" };
 
 export default async function ReviewQueuePage() {
-  const [queue, stats] = await Promise.all([getReviewQueue(), getQueueStats()]);
+  const [queue, stats, ctx] = await Promise.all([getReviewQueue(), getQueueStats(), getAuthContext()]);
 
   return (
     <div>
-      <PageHeader title="Review Queue" description="Human review and override workflow (Spec §4.H)" />
+      <PageHeader
+        eyebrow="Adjudication"
+        authority="Spec §4.H · human-in-the-loop"
+        title="Review queue"
+        description="Determinations the engine could not issue on its own. A qualified reviewer decides each one on the record — oldest first."
+      />
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Pending</p><p className="text-2xl font-bold">{stats.pendingReview}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Reviewed</p><p className="text-2xl font-bold">{stats.reviewed}</p></div>
-        <div className="rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">Overridden</p><p className="text-2xl font-bold">{stats.overridden}</p></div>
+      <div className="mb-6 grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="Awaiting review" value={stats.pendingReview} icon={ClipboardCheck} tone={stats.pendingReview > 0 ? "info" : "success"} />
+        <StatCard label="Reviews recorded" value={stats.reviewed} icon={UserCheck} />
+        <StatCard label="Overrides" value={stats.overridden} icon={ShieldAlert} tone={stats.overridden > 0 ? "warning" : "default"} />
       </div>
 
       {queue.length === 0 ? (
-        <EmptyState title="Queue is empty" description="No applications are pending human review." />
+        <EmptyState icon={ClipboardCheck} title="The queue is clear" description="Every determination has been reviewed. New cases appear here when the engine routes them for human judgment." />
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-2">
           {queue.map((item) => (
-            <ReviewCard key={item.id} decision={item} hasAssessment={!!item.individualizedAssessment} />
+            <ReviewCard key={item.id} decision={item} hasAssessment={!!item.individualizedAssessment} canAct={ctx.accessTier === "FULL"} />
           ))}
         </div>
       )}

@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function ingestScreeningRecords(
@@ -25,9 +26,17 @@ export async function ingestScreeningRecords(
   const { orgId } = await getAuthContext();
 
   // Verify the application belongs to this org
-  await prisma.application.findFirstOrThrow({
+  const application = await prisma.application.findFirst({
     where: { id: applicationId, organizationId: orgId },
+    select: { id: true },
   });
+  if (!application) return { success: false, error: "Application not found" };
+  if (records.length === 0) return { success: false, error: "No records to ingest" };
+  if (records.length > 500) return { success: false, error: "Upload at most 500 records at a time" };
+  const allowedTypes = ["CREDIT_REPORT", "CRIMINAL_HISTORY", "EVICTION_HISTORY", "EMPLOYMENT_VERIFICATION", "RENTAL_HISTORY", "IDENTITY_VERIFICATION", "INCOME_VERIFICATION", "BACKGROUND_CHECK"];
+  if (records.some((r) => !allowedTypes.includes(r.recordType) || !r.vendorName?.trim())) {
+    return { success: false, error: "Each record needs a vendor and a supported record type" };
+  }
 
   const created = await prisma.screeningRecord.createMany({
     data: records.map((record) => ({
@@ -45,18 +54,23 @@ export async function ingestScreeningRecords(
     })),
   });
 
-  revalidatePath(`/dashboard/applications/${applicationId}/records`);
+  await recordAudit({
+    tableName: "ScreeningRecord",
+    recordId: applicationId,
+    action: "INGEST",
+    after: { count: created.count, vendors: [...new Set(records.map((r) => r.vendorName))] },
+    metadata: { applicationId },
+  });
+
+  revalidatePath("/dashboard/ingestion");
+  revalidatePath(`/dashboard/applications/${applicationId}`, "layout");
   return { success: true, data: { count: created.count } };
 }
 
 export async function getScreeningRecords(applicationId: string) {
   const { orgId } = await getAuthContext();
-  await prisma.application.findFirstOrThrow({
-    where: { id: applicationId, organizationId: orgId },
-  });
-
   return prisma.screeningRecord.findMany({
-    where: { applicationId },
+    where: { applicationId, application: { organizationId: orgId } },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -70,20 +84,18 @@ export async function quarantineRecord(
   const { orgId } = await getAuthContext();
 
   // Verify the record's application belongs to this org
-  const record = await prisma.screeningRecord.findFirstOrThrow({
-    where: { id: recordId },
-    include: { application: true },
+  const record = await prisma.screeningRecord.findFirst({
+    where: { id: recordId, application: { organizationId: orgId } },
   });
-
-  if (record.application.organizationId !== orgId) {
-    return { success: false, error: "Unauthorized" };
-  }
+  if (!record) return { success: false, error: "Record not found" };
 
   await prisma.screeningRecord.update({
     where: { id: recordId },
     data: { isQuarantined: true, quarantineReason: reason },
   });
 
+  await recordAudit({ tableName: "ScreeningRecord", recordId, action: "QUARANTINE", after: { reason }, metadata: { applicationId: record.applicationId } });
+  revalidatePath(`/dashboard/applications/${record.applicationId}`, "layout");
   return { success: true };
 }
 

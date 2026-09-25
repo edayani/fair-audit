@@ -83,13 +83,13 @@ export const CALIFORNIA_RULES = {
 export const COMPLIANCE_MODE_DESCRIPTIONS = {
   FEDERAL_CA: {
     label: "Federal + California",
-    description: "Applies both federal Fair Housing Act protections and California FEHA expanded protections. This is the default and most protective mode.",
+    description: "Applies the federal Fair Housing Act together with California's Fair Employment and Housing Act (FEHA), including source-of-income protection and the Civil Rights Council's criminal-history regulations. The most protective standard; recommended.",
     isDefault: true,
   },
   COURT_ONLY: {
-    label: "Court-Only Disparate Impact",
-    description: "Applies only the Supreme Court's narrower disparate impact standard from Texas Dept. of Housing v. Inclusive Communities (2015).",
-    disclaimer: "DISCLAIMER: In January 2026, HUD proposed removing its codified discriminatory-effects regulations. This mode uses only the court-defined standard, which may provide less protection than the full regulatory framework. Consult legal counsel before selecting this mode.",
+    label: "Judicial disparate-impact standard only",
+    description: "Evaluates discriminatory effects solely under the standard articulated in Texas Dep't of Housing & Community Affairs v. Inclusive Communities Project, Inc., 576 U.S. 519 (2015) — including its robust-causality requirement — without relying on agency regulations.",
+    disclaimer: "Federal regulatory standards for discriminatory effects (24 C.F.R. § 100.500) have been the subject of repeated rulemaking and litigation. This mode applies only the judicially recognized standard, which may afford applicants less protection than the regulatory framework or state law. State-law obligations continue to apply regardless of this setting. Consult counsel before selecting it.",
     isDefault: false,
   },
 };

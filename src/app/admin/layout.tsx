@@ -1,40 +1,42 @@
-import { currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Shield, ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
+import { currentUser } from "@clerk/nextjs/server";
+import { ArrowLeft } from "lucide-react";
+import { isPlatformAdmin } from "@/lib/auth";
 import { AppProviders } from "@/components/providers/app-providers";
+import { Logo } from "@/components/brand/logo";
+import { Badge } from "@/components/ui/badge";
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Platform admin",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  if (!(await isPlatformAdmin())) redirect("/dashboard");
   const user = await currentUser();
-  const email = user?.emailAddresses?.[0]?.emailAddress;
-
-  if (!ADMIN_EMAIL || !email || email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-    redirect("/dashboard");
-  }
+  const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses?.[0]?.emailAddress;
 
   return (
     <AppProviders>
       <div className="min-h-screen bg-background">
         <nav className="border-b bg-card">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex h-14 items-center justify-between">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-4 w-4" />
-                Dashboard
+              <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="size-4" />
+                <span className="hidden sm:inline">Workspace</span>
               </Link>
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <span className="font-semibold">FairAudit Admin</span>
-              </div>
+              <Logo />
+              <Badge tone="brand">Platform admin</Badge>
             </div>
-            <span className="text-xs text-muted-foreground">{email}</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline">{email}</span>
           </div>
         </nav>
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
       </div>
     </AppProviders>
   );

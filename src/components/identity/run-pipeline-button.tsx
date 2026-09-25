@@ -1,35 +1,49 @@
 "use client";
-// Spec §4.C, §4.D — Run identity resolution and relevance labeling pipeline
+// Spec §4.C, §4.D, §4.G — identity resolution → relevance labeling → determination
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Play } from "lucide-react";
 import { resolveIdentity } from "@/actions/identity";
 import { labelApplicationRelevance } from "@/actions/relevance";
 import { runDecision } from "@/actions/decision";
 import { toast } from "@/lib/toast";
-import { Play } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export function RunPipelineButton({ applicationId }: { applicationId: string }) {
+export function RunPipelineButton({ applicationId, hasDecision }: { applicationId: string; hasDecision?: boolean }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleRun() {
     startTransition(async () => {
-      toast.info("Running screening pipeline...");
+      const id = toast.loading("Resolving identities…");
       const idResult = await resolveIdentity(applicationId);
-      if (!idResult.success) { toast.error(idResult.error); return; }
-      toast.info(`Identity resolved: ${idResult.data?.processed} records, ${idResult.data?.quarantined} quarantined`);
+      if (!idResult.success) {
+        toast.error(idResult.error ?? "Identity resolution failed", { id });
+        return;
+      }
 
+      toast.loading(`Identity resolved (${idResult.data?.quarantined ?? 0} quarantined). Labeling relevance…`, { id });
       const relResult = await labelApplicationRelevance(applicationId);
-      if (!relResult.success) { toast.error(relResult.error); return; }
-      toast.info(`Relevance labeled: ${relResult.data?.labeled} records`);
+      if (!relResult.success) {
+        toast.error(relResult.error ?? "Relevance labeling failed", { id });
+        return;
+      }
 
+      toast.loading("Evaluating against the published policy…", { id });
       const decResult = await runDecision(applicationId);
-      if (!decResult.success) { toast.error(decResult.error); return; }
-      toast.success("Pipeline complete! Decision generated.");
+      if (!decResult.success) {
+        toast.error(decResult.error ?? "Evaluation failed", { id });
+        return;
+      }
+      toast.success("Determination issued with reason codes", { id });
+      router.refresh();
     });
   }
 
   return (
-    <button onClick={handleRun} disabled={isPending} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-      <Play className="h-4 w-4" /> {isPending ? "Running..." : "Run Pipeline"}
-    </button>
+    <Button onClick={handleRun} loading={isPending}>
+      {!isPending && <Play />}
+      {hasDecision ? "Re-run pipeline" : "Run screening pipeline"}
+    </Button>
   );
 }

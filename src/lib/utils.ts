@@ -45,15 +45,34 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-/** Convert enum-style string to human-readable */
+/** Convert enum-style (SNAKE_CASE) or camelCase strings to human-readable sentence case */
 export function humanize(str: string): string {
-  return str
-    .replace(/_/g, " ")
-    .replace(/([A-Z])/g, " $1")
+  const words = str
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .trim()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+  if (words.length === 0) return "";
+  words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+  return words.join(" ");
+}
+
+/** Initials for avatars (e.g., "Maria Lopez" -> "ML") */
+export function initials(name: string | null | undefined): string {
+  if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
+}
+
+/** Compact number formatting (e.g., 1200 -> 1.2K) */
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US", { notation: value >= 10000 ? "compact" : "standard" }).format(value);
 }
 
 /** Truncate text */
@@ -62,29 +81,13 @@ export function truncate(str: string, length: number): string {
   return str.slice(0, length) + "...";
 }
 
-/** Sleep utility for development */
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Outcome color mapping for UI */
-export function getOutcomeColor(outcome: string): string {
+/** Surface styles for a decision outcome banner (light + dark) */
+export function getOutcomeSurface(outcome: string): string {
   switch (outcome) {
-    case "APPROVED": return "text-green-600 bg-green-50 border-green-200";
-    case "DENIED": return "text-red-600 bg-red-50 border-red-200";
-    case "CONDITIONAL": return "text-yellow-600 bg-yellow-50 border-yellow-200";
-    case "PENDING_REVIEW": return "text-blue-600 bg-blue-50 border-blue-200";
-    default: return "text-gray-600 bg-gray-50 border-gray-200";
-  }
-}
-
-/** Severity color mapping */
-export function getSeverityColor(severity: string): string {
-  switch (severity) {
-    case "LOW": return "text-blue-600 bg-blue-50";
-    case "MEDIUM": return "text-yellow-600 bg-yellow-50";
-    case "HIGH": return "text-orange-600 bg-orange-50";
-    case "CRITICAL": return "text-red-600 bg-red-50";
-    default: return "text-gray-600 bg-gray-50";
+    case "APPROVED": return "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100";
+    case "DENIED": return "border-rose-200 bg-rose-50/70 text-rose-900 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-100";
+    case "CONDITIONAL": return "border-amber-200 bg-amber-50/70 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100";
+    case "PENDING_REVIEW": return "border-sky-200 bg-sky-50/70 text-sky-900 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-100";
+    default: return "border-border bg-muted text-foreground";
   }
 }

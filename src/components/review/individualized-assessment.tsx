@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil, Scale } from "lucide-react";
 import { submitIndividualizedAssessment } from "@/actions/assessment";
 import { toast } from "@/lib/toast";
-import { Scale } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface AssessmentData {
   id?: string;
@@ -18,287 +23,235 @@ interface AssessmentData {
   tenancyNexus?: string | null;
   overallAssessment?: string | null;
   recommendedOutcome?: string | null;
+  assessedBy?: string | null;
+  assessedAt?: Date | string | null;
 }
 
 interface Props {
   decisionId: string;
   existing?: AssessmentData | null;
-  readOnly?: boolean;
+  /** Viewers without full access see the record but cannot edit it */
+  canEdit?: boolean;
 }
 
-function ScoreDisplay({ score, max = 5 }: { score: number; max?: number }) {
+const SCALES = {
+  severity: ["Minimal", "Minor", "Moderate", "Serious", "Severe"],
+  rehabilitation: ["None", "Minimal", "Some", "Significant", "Exceptional"],
+  mitigation: ["None", "Minimal", "Some", "Significant", "Compelling"],
+};
+
+const OUTCOME_LABELS: Record<string, string> = { APPROVE: "Approve", DENY: "Deny", CONDITIONAL: "Conditional approval" };
+
+function ScalePicker({ value, onChange, labels, name }: { value: number; onChange: (v: number) => void; labels: string[]; name: string }) {
   return (
-    <span className="text-sm tracking-wider">
-      {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={i < score ? "text-amber-600" : "text-gray-300 dark:text-gray-600"}>
-          {i < score ? "\u25CF" : "\u25CB"}
-        </span>
+    <div role="radiogroup" aria-label={name} className="flex flex-wrap gap-1.5">
+      {labels.map((label, idx) => {
+        const score = idx + 1;
+        const active = value === score;
+        return (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(score)}
+            className={cn(
+              "rounded-lg border px-2.5 py-1 text-xs transition-colors",
+              active ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
+            )}
+          >
+            {score} · {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScoreDots({ score }: { score?: number | null }) {
+  const s = score ?? 0;
+  return (
+    <span className="inline-flex items-center gap-1" aria-label={`${s} of 5`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={cn("size-2 rounded-full", i < s ? "bg-brass" : "bg-muted")} />
       ))}
-      <span className="ml-1.5 text-xs text-muted-foreground">({score}/{max})</span>
     </span>
   );
 }
 
-const FACTOR_1_LABELS = ["Minimal", "Minor", "Moderate", "Serious", "Severe"];
-const FACTOR_2_LABELS = ["Very Recent", "Recent", "Moderate", "Distant", "Very Distant"];
-const FACTOR_3_LABELS = ["None", "Minimal", "Some", "Significant", "Exceptional"];
-const FACTOR_4_LABELS = ["None", "Minimal", "Some", "Significant", "Compelling"];
-
-export function IndividualizedAssessment({ decisionId, existing, readOnly = false }: Props) {
+export function IndividualizedAssessment({ decisionId, existing, canEdit = true }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(!existing && canEdit);
 
-  const [natureAndSeriousness, setNatureAndSeriousness] = useState(existing?.natureAndSeriousness ?? "");
-  const [natureSeverity, setNatureSeverity] = useState(existing?.natureSeverity ?? 0);
-  const [timeElapsed, setTimeElapsed] = useState(existing?.timeElapsed ?? "");
-  const [timeElapsedMonths, setTimeElapsedMonths] = useState(existing?.timeElapsedMonths ?? 0);
-  const [rehabilitation, setRehabilitation] = useState(existing?.rehabilitation ?? "");
-  const [rehabilitationScore, setRehabilitationScore] = useState(existing?.rehabilitationScore ?? 0);
-  const [mitigatingCircumstances, setMitigatingCircumstances] = useState(existing?.mitigatingCircumstances ?? "");
-  const [mitigatingScore, setMitigatingScore] = useState(existing?.mitigatingScore ?? 0);
-  const [tenancyNexus, setTenancyNexus] = useState(existing?.tenancyNexus ?? "");
-  const [overallAssessment, setOverallAssessment] = useState(existing?.overallAssessment ?? "");
-  const [recommendedOutcome, setRecommendedOutcome] = useState(existing?.recommendedOutcome ?? "APPROVE");
+  const [form, setForm] = useState({
+    natureAndSeriousness: existing?.natureAndSeriousness ?? "",
+    natureSeverity: existing?.natureSeverity ?? 0,
+    timeElapsed: existing?.timeElapsed ?? "",
+    timeElapsedMonths: existing?.timeElapsedMonths ?? 0,
+    rehabilitation: existing?.rehabilitation ?? "",
+    rehabilitationScore: existing?.rehabilitationScore ?? 0,
+    mitigatingCircumstances: existing?.mitigatingCircumstances ?? "",
+    mitigatingScore: existing?.mitigatingScore ?? 0,
+    tenancyNexus: existing?.tenancyNexus ?? "",
+    overallAssessment: existing?.overallAssessment ?? "",
+    recommendedOutcome: existing?.recommendedOutcome ?? "APPROVE",
+  });
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  function handleSubmit() {
-    if (!natureAndSeriousness.trim() || !timeElapsed.trim() || !rehabilitation.trim() || !tenancyNexus.trim() || !overallAssessment.trim()) {
-      toast.error("All text fields are required");
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const required = [form.natureAndSeriousness, form.timeElapsed, form.rehabilitation, form.tenancyNexus, form.overallAssessment];
+    if (required.some((v) => !v.trim())) {
+      toast.error("Complete each factor and the overall assessment.");
       return;
     }
-    if (natureSeverity < 1 || rehabilitationScore < 1 || mitigatingScore < 1) {
-      toast.error("All scores must be selected (1-5)");
+    if (form.natureSeverity < 1 || form.rehabilitationScore < 1 || form.mitigatingScore < 1) {
+      toast.error("Select a rating for each scored factor.");
       return;
     }
-
     startTransition(async () => {
-      const result = await submitIndividualizedAssessment(decisionId, {
-        natureAndSeriousness,
-        natureSeverity,
-        timeElapsed,
-        timeElapsedMonths,
-        rehabilitation,
-        rehabilitationScore,
-        mitigatingCircumstances,
-        mitigatingScore,
-        tenancyNexus,
-        overallAssessment,
-        recommendedOutcome,
-      });
-      if (result.success) toast.success("Individualized assessment saved");
-      else toast.error(result.error ?? "Failed to save assessment");
+      const result = await submitIndividualizedAssessment(decisionId, form);
+      if (result.success) {
+        toast.success("Individualized assessment recorded and preserved to the evidence vault");
+        setEditing(false);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to save assessment");
+      }
     });
   }
 
-  function renderScoreRadios(
-    value: number,
-    onChange: (v: number) => void,
-    labels: string[]
-  ) {
-    if (readOnly) {
-      return <ScoreDisplay score={value} />;
+  const header = (
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 sm:px-6">
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+          <Scale className="size-4" />
+        </div>
+        <div>
+          <h3 className="text-[15px] font-semibold">Individualized assessment of criminal history</h3>
+          <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            HUD Office of General Counsel Guidance on Application of Fair Housing Act Standards to the Use of Criminal Records
+            (Apr. 4, 2016). Blanket bans are presumptively unjustified; arrests alone are never a basis for denial.
+          </p>
+        </div>
+      </div>
+      {existing && !editing && (
+        <div className="flex items-center gap-2">
+          <Badge tone="success">Completed</Badge>
+          {canEdit && (
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              <Pencil />
+              Revise
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (!editing) {
+    if (!existing) {
+      return (
+        <div className="rounded-xl border border-amber-300 bg-card dark:border-amber-700/60">
+          {header}
+          <p className="px-5 py-4 text-sm text-muted-foreground sm:px-6">
+            An assessment is required before a final determination can be issued. Full access is required to complete it.
+          </p>
+        </div>
+      );
     }
+    const rows = [
+      { label: "Nature and seriousness of the offense", text: existing.natureAndSeriousness, score: existing.natureSeverity },
+      { label: `Time elapsed${existing.timeElapsedMonths ? ` (${existing.timeElapsedMonths} months)` : ""}`, text: existing.timeElapsed },
+      { label: "Evidence of rehabilitation", text: existing.rehabilitation, score: existing.rehabilitationScore },
+      { label: "Mitigating circumstances", text: existing.mitigatingCircumstances, score: existing.mitigatingScore },
+      { label: "Nexus to tenancy", text: existing.tenancyNexus },
+      { label: "Overall assessment", text: existing.overallAssessment },
+    ];
     return (
-      <div className="flex items-center gap-3 flex-wrap">
-        {labels.map((label, idx) => {
-          const score = idx + 1;
-          return (
-            <label key={score} className="flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="radio"
-                name={`score-${label}-${labels[0]}`}
-                checked={value === score}
-                onChange={() => onChange(score)}
-                className="accent-amber-600"
-              />
-              <span className="text-xs">{score} - {label}</span>
-            </label>
-          );
-        })}
+      <div className="rounded-xl border bg-card">
+        {header}
+        <dl className="divide-y">
+          {rows.map((r) => (
+            <div key={r.label} className="grid gap-1 px-5 py-3.5 sm:grid-cols-[220px_1fr] sm:gap-4 sm:px-6">
+              <dt className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:block">
+                {r.label}
+                {r.score != null && (
+                  <span className="sm:mt-1.5 sm:block">
+                    <ScoreDots score={r.score} />
+                  </span>
+                )}
+              </dt>
+              <dd className="whitespace-pre-wrap text-sm leading-relaxed">{r.text || "—"}</dd>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 sm:px-6">
+            <span className="text-sm">
+              Recommended outcome: <strong>{OUTCOME_LABELS[existing.recommendedOutcome ?? ""] ?? "—"}</strong>
+            </span>
+            {existing.assessedBy && <span className="text-xs text-muted-foreground">Assessed by {existing.assessedBy}</span>}
+          </div>
+        </dl>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-l-4 border-amber-500 bg-card p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Scale className="h-5 w-5 text-amber-600" />
-          HUD Individualized Assessment
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          HUD Office of General Counsel Guidance on Application of FHA Standards (April 4, 2016)
-        </p>
-      </div>
+    <form onSubmit={handleSubmit} className="rounded-xl border border-amber-300 bg-card dark:border-amber-700/60">
+      {header}
+      <div className="space-y-6 px-5 py-5 sm:px-6">
+        <Field label="Factor 1 — Nature and seriousness of the offense" required>
+          <Textarea value={form.natureAndSeriousness} onChange={(e) => set("natureAndSeriousness", e.target.value)} rows={3} placeholder="Describe the conduct, the disposition, and whether it involved harm to persons or property…" />
+          <ScalePicker name="Severity" value={form.natureSeverity} onChange={(v) => set("natureSeverity", v)} labels={SCALES.severity} />
+        </Field>
 
-      <div className="space-y-6">
-        {/* Factor 1: Nature and Seriousness */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Factor 1: Nature and Seriousness of the Offense</h4>
-          {readOnly ? (
-            <p className="text-sm mb-2 whitespace-pre-wrap">{existing?.natureAndSeriousness || "Not provided"}</p>
-          ) : (
-            <textarea
-              value={natureAndSeriousness}
-              onChange={(e) => setNatureAndSeriousness(e.target.value)}
-              placeholder="Describe the nature and seriousness of the offense(s)..."
-              rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-2"
-            />
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Severity Rating:</p>
-            {renderScoreRadios(natureSeverity, setNatureSeverity, FACTOR_1_LABELS)}
+        <Field label="Factor 2 — Time elapsed since the offense" required>
+          <Textarea value={form.timeElapsed} onChange={(e) => set("timeElapsed", e.target.value)} rows={2} placeholder="Time since the conduct and since completion of any sentence…" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Months since offense</span>
+            <Input type="number" min={0} className="h-8 w-24" value={form.timeElapsedMonths} onChange={(e) => set("timeElapsedMonths", parseInt(e.target.value) || 0)} />
           </div>
-        </div>
+        </Field>
 
-        {/* Factor 2: Time Elapsed */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Factor 2: Time Elapsed Since the Offense</h4>
-          {readOnly ? (
-            <p className="text-sm mb-2 whitespace-pre-wrap">{existing?.timeElapsed || "Not provided"}</p>
-          ) : (
-            <>
-              <textarea
-                value={timeElapsed}
-                onChange={(e) => setTimeElapsed(e.target.value)}
-                placeholder="Describe the time elapsed since the criminal conduct and/or completion of sentence..."
-                rows={3}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-2"
-              />
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-xs text-muted-foreground">Months since offense:</label>
-                <input
-                  type="number"
-                  value={timeElapsedMonths}
-                  onChange={(e) => setTimeElapsedMonths(parseInt(e.target.value) || 0)}
-                  min={0}
-                  className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
-                />
-              </div>
-            </>
-          )}
-          {readOnly && existing?.timeElapsedMonths != null && (
-            <p className="text-xs text-muted-foreground mb-2">Months since offense: {existing.timeElapsedMonths}</p>
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Time Distance Rating:</p>
-            {renderScoreRadios(
-              readOnly ? (existing?.timeElapsedMonths != null ? Math.min(5, Math.max(1, Math.ceil(existing.timeElapsedMonths / 24))) : 0) : Math.min(5, Math.max(timeElapsedMonths > 0 ? 1 : 0, Math.ceil(timeElapsedMonths / 24))),
-              () => {},
-              FACTOR_2_LABELS
-            )}
-          </div>
-        </div>
+        <Field label="Factor 3 — Evidence of rehabilitation or good conduct" required>
+          <Textarea value={form.rehabilitation} onChange={(e) => set("rehabilitation", e.target.value)} rows={3} placeholder="Employment, program completion, references, tenancy history since the offense…" />
+          <ScalePicker name="Rehabilitation" value={form.rehabilitationScore} onChange={(v) => set("rehabilitationScore", v)} labels={SCALES.rehabilitation} />
+        </Field>
 
-        {/* Factor 3: Rehabilitation */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Factor 3: Evidence of Rehabilitation or Good Conduct</h4>
-          {readOnly ? (
-            <p className="text-sm mb-2 whitespace-pre-wrap">{existing?.rehabilitation || "Not provided"}</p>
-          ) : (
-            <textarea
-              value={rehabilitation}
-              onChange={(e) => setRehabilitation(e.target.value)}
-              placeholder="Describe any evidence of rehabilitation, good conduct, or positive changes..."
-              rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-2"
-            />
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Rehabilitation Rating:</p>
-            {renderScoreRadios(rehabilitationScore, setRehabilitationScore, FACTOR_3_LABELS)}
-          </div>
-        </div>
+        <Field label="Factor 4 — Mitigating circumstances">
+          <Textarea value={form.mitigatingCircumstances} onChange={(e) => set("mitigatingCircumstances", e.target.value)} rows={2} placeholder="Age at the time of the offense, surrounding circumstances, supportive services…" />
+          <ScalePicker name="Mitigation" value={form.mitigatingScore} onChange={(v) => set("mitigatingScore", v)} labels={SCALES.mitigation} />
+        </Field>
 
-        {/* Factor 4: Mitigating Circumstances */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Factor 4: Mitigating Circumstances</h4>
-          {readOnly ? (
-            <p className="text-sm mb-2 whitespace-pre-wrap">{existing?.mitigatingCircumstances || "Not provided"}</p>
-          ) : (
-            <textarea
-              value={mitigatingCircumstances}
-              onChange={(e) => setMitigatingCircumstances(e.target.value)}
-              placeholder="Describe any mitigating circumstances (age at time of offense, context, etc.)..."
-              rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm mb-2"
-            />
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Mitigating Factors Rating:</p>
-            {renderScoreRadios(mitigatingScore, setMitigatingScore, FACTOR_4_LABELS)}
-          </div>
-        </div>
+        <Field label="Nexus to tenancy" hint="Does the record demonstrably relate to resident safety or property? If not, it should not support a denial." required>
+          <Textarea value={form.tenancyNexus} onChange={(e) => set("tenancyNexus", e.target.value)} rows={2} />
+        </Field>
 
-        {/* Tenancy Nexus */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Tenancy Nexus</h4>
-          <p className="text-xs text-muted-foreground mb-2">
-            How does this offense relate to the applicant&apos;s ability to be a responsible tenant?
-          </p>
-          {readOnly ? (
-            <p className="text-sm whitespace-pre-wrap">{existing?.tenancyNexus || "Not provided"}</p>
-          ) : (
-            <textarea
-              value={tenancyNexus}
-              onChange={(e) => setTenancyNexus(e.target.value)}
-              placeholder="Explain the connection (or lack thereof) between the offense and tenancy responsibilities..."
-              rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          )}
-        </div>
+        <Field label="Overall assessment" required>
+          <Textarea value={form.overallAssessment} onChange={(e) => set("overallAssessment", e.target.value)} rows={3} placeholder="Weigh all factors and state the reasoning supporting your recommendation…" />
+        </Field>
 
-        {/* Overall Assessment */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Overall Assessment</h4>
-          {readOnly ? (
-            <p className="text-sm whitespace-pre-wrap">{existing?.overallAssessment || "Not provided"}</p>
-          ) : (
-            <textarea
-              value={overallAssessment}
-              onChange={(e) => setOverallAssessment(e.target.value)}
-              placeholder="Provide your overall individualized assessment considering all four HUD factors..."
-              rows={4}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          )}
-        </div>
-
-        {/* Recommended Outcome */}
-        <div className="rounded-lg border bg-card p-4">
-          <h4 className="font-medium mb-2">Recommended Outcome</h4>
-          {readOnly ? (
-            <p className="text-sm font-medium">
-              {existing?.recommendedOutcome === "APPROVE" && "Approve"}
-              {existing?.recommendedOutcome === "DENY" && "Deny"}
-              {existing?.recommendedOutcome === "CONDITIONAL" && "Conditional Approval"}
-              {!existing?.recommendedOutcome && "Not provided"}
-            </p>
-          ) : (
-            <select
-              value={recommendedOutcome}
-              onChange={(e) => setRecommendedOutcome(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            >
+        <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-end sm:justify-between">
+          <Field label="Recommended outcome" className="sm:w-56">
+            <Select value={form.recommendedOutcome} onChange={(e) => set("recommendedOutcome", e.target.value)}>
               <option value="APPROVE">Approve</option>
+              <option value="CONDITIONAL">Conditional approval</option>
               <option value="DENY">Deny</option>
-              <option value="CONDITIONAL">Conditional Approval</option>
-            </select>
-          )}
+            </Select>
+          </Field>
+          <div className="flex gap-2">
+            {existing && (
+              <Button variant="outline" onClick={() => setEditing(false)} disabled={isPending}>
+                Cancel
+              </Button>
+            )}
+            <Button type="submit" loading={isPending}>
+              {existing ? "Save revision" : "Record assessment"}
+            </Button>
+          </div>
         </div>
-
-        {/* Submit button (hidden in readOnly mode) */}
-        {!readOnly && (
-          <button
-            onClick={handleSubmit}
-            disabled={isPending}
-            className="rounded-md bg-amber-600 text-white px-6 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
-          >
-            {isPending ? "Saving..." : existing ? "Update Assessment" : "Submit Assessment"}
-          </button>
-        )}
       </div>
-    </div>
+    </form>
   );
 }

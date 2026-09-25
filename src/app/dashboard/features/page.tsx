@@ -1,59 +1,93 @@
+import { AlertTriangle, Layers, ShieldCheck } from "lucide-react";
 import { getFeatureRegistry } from "@/actions/proxy-risk";
 import { PageHeader } from "@/components/shared/page-header";
 import { RunProxyDetectionButton } from "@/components/proxy-risk/run-proxy-detection-button";
+import { PreviewGate } from "@/components/shared/preview-gate";
+import { EmptyState } from "@/components/shared/empty-state";
+import { StatCard, Meter } from "@/components/shared/stat-card";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { humanize } from "@/lib/utils";
-import { AlertTriangle, Shield } from "lucide-react";
+
+export const metadata = { title: "Feature governance" };
 
 export default async function FeaturesPage() {
   const features = await getFeatureRegistry();
+  const flagged = features.filter((f) => f.flaggedAsProxy);
 
   return (
-    <div>
-      <PageHeader title="Feature Registry" description="Proxy-risk and feature governance (Spec §4.E)">
-        <RunProxyDetectionButton />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Adjudication"
+        authority="Spec §4.E · proxy discrimination"
+        title="Feature governance"
+        description="Every data point a screening model can consider, scored for its risk of acting as a proxy for a protected characteristic — so facially neutral inputs don't reproduce prohibited distinctions."
+      >
+        <PreviewGate label="Full access required">
+          <RunProxyDetectionButton />
+        </PreviewGate>
       </PageHeader>
 
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="Registered features" value={features.length} icon={Layers} />
+        <StatCard label="Flagged as proxies" value={flagged.length} icon={AlertTriangle} tone={flagged.length ? "danger" : "success"} />
+        <StatCard
+          label="Legal review complete"
+          value={features.filter((f) => f.legalReviewStatus && f.legalReviewStatus !== "pending").length}
+          icon={ShieldCheck}
+        />
+      </div>
+
       {features.length === 0 ? (
-        <p className="text-muted-foreground">No features registered. Seed demo data or register features manually.</p>
+        <EmptyState icon={Layers} title="No features registered" description="Load the sample portfolio or register the inputs your screening vendors provide." />
       ) : (
-        <div className="rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
+        <Card className="overflow-hidden">
+          <Table>
+            <THead>
               <tr>
-                <th className="h-12 px-4 text-left font-medium text-muted-foreground">Feature</th>
-                <th className="h-12 px-4 text-left font-medium text-muted-foreground">Source</th>
-                <th className="h-12 px-4 text-left font-medium text-muted-foreground">Proxy Risk</th>
-                <th className="h-12 px-4 text-left font-medium text-muted-foreground">Proxy For</th>
-                <th className="h-12 px-4 text-left font-medium text-muted-foreground">Status</th>
+                <TH>Feature</TH>
+                <TH className="hidden md:table-cell">Source</TH>
+                <TH>Proxy risk</TH>
+                <TH className="hidden lg:table-cell">Potential proxy for</TH>
+                <TH>Status</TH>
               </tr>
-            </thead>
-            <tbody>
-              {features.map((f) => (
-                <tr key={f.id} className="border-b hover:bg-muted/50">
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      {f.flaggedAsProxy ? <AlertTriangle className="h-4 w-4 text-orange-500" /> : <Shield className="h-4 w-4 text-green-500" />}
-                      <div><p className="font-medium">{f.displayName}</p><p className="text-xs text-muted-foreground">{f.name}</p></div>
-                    </div>
-                  </td>
-                  <td className="p-4 text-muted-foreground">{f.source}</td>
-                  <td className="p-4">
-                    {f.proxyRiskScore != null && (
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${f.proxyRiskScore > 0.6 ? "bg-red-500" : f.proxyRiskScore > 0.3 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${f.proxyRiskScore * 100}%` }} />
+            </THead>
+            <TBody>
+              {features.map((f) => {
+                const score = f.proxyRiskScore ?? 0;
+                const tone = score > 0.6 ? "danger" : score > 0.3 ? "warning" : "success";
+                return (
+                  <TR key={f.id} className="align-top">
+                    <TD className="max-w-xs">
+                      <p className="font-medium">{f.displayName}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">{f.name}</p>
+                      {f.proxyExplanation && f.flaggedAsProxy && <p className="mt-1 text-xs leading-snug text-muted-foreground">{f.proxyExplanation.split("\n")[0]}</p>}
+                    </TD>
+                    <TD className="hidden capitalize text-muted-foreground md:table-cell">{f.source}</TD>
+                    <TD className="w-40">
+                      {f.proxyRiskScore != null ? (
+                        <div className="flex items-center gap-2">
+                          <Meter value={score} tone={tone} className="w-20" label={`Proxy risk ${Math.round(score * 100)}%`} />
+                          <span className="text-xs tabular">{Math.round(score * 100)}%</span>
                         </div>
-                        <span className="text-xs">{(f.proxyRiskScore * 100).toFixed(0)}%</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not scored</span>
+                      )}
+                    </TD>
+                    <TD className="hidden text-muted-foreground lg:table-cell">{f.proxyFor ? humanize(f.proxyFor) : "—"}</TD>
+                    <TD>
+                      <div className="flex flex-col items-start gap-1">
+                        {f.flaggedAsProxy ? <Badge tone="danger">Flagged</Badge> : <Badge tone="success">Clear</Badge>}
+                        {f.legalReviewStatus && <Badge tone={f.legalReviewStatus === "approved" ? "success" : f.legalReviewStatus === "rejected" ? "danger" : "neutral"}>Counsel: {f.legalReviewStatus}</Badge>}
                       </div>
-                    )}
-                  </td>
-                  <td className="p-4 text-muted-foreground">{f.proxyFor ?? "-"}</td>
-                  <td className="p-4"><span className={`text-xs px-2 py-0.5 rounded-full ${f.flaggedAsProxy ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{f.flaggedAsProxy ? "Flagged" : "Clear"}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

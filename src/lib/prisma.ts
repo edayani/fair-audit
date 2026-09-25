@@ -6,7 +6,14 @@ const globalForPrisma = globalThis as unknown as { prisma: ReturnType<typeof cre
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!;
-  const adapter = new PrismaPg({ connectionString });
+  // Keep per-instance pools small: on Vercel each function instance holds its own pool,
+  // and idle connections are released quickly so the database is not exhausted.
+  const adapter = new PrismaPg({
+    connectionString,
+    max: process.env.NODE_ENV === "production" ? 5 : 10,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+  });
   const basePrisma = new PrismaClient({ adapter });
 
   // Spec §4.K — Immutable audit log: block mutations on protected tables

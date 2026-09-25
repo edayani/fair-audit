@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { computeDisparateImpact, computeFairnessReport } from "@/lib/engines/fairness";
 import { revalidatePath } from "next/cache";
+import { preserveEvidence, recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function runFairnessAnalysis(
@@ -54,25 +55,27 @@ export async function runFairnessAnalysis(
 
   const report = computeFairnessReport(analysisData, periodStart, periodEnd);
 
-  // Store metrics
-  for (const di of report.disparateImpactResults) {
-    for (const group of di.groups) {
-      await prisma.fairnessMetric.create({
-        data: {
-          organizationId: orgId,
-          propertyId,
-          metricType: "approval_rate",
-          protectedClass: di.protectedClass,
-          groupValue: group.groupName,
-          value: group.approvalRate,
-          sampleSize: group.total,
-          periodStart,
-          periodEnd,
-          metadata: JSON.parse(JSON.stringify({ impactRatio: di.impactRatio, hasPotentialDisparateImpact: di.hasPotentialDisparateImpact })),
-        },
-      });
-    }
+  if (analysisData.length === 0) {
+    return { success: false, error: "No decided applications in the selected period. Decide applications first, then re-run the analysis." };
   }
+
+  // Store metrics
+  await prisma.fairnessMetric.createMany({
+    data: report.disparateImpactResults.flatMap((di) =>
+      di.groups.map((group) => ({
+        organizationId: orgId,
+        propertyId,
+        metricType: "approval_rate",
+        protectedClass: di.protectedClass,
+        groupValue: group.groupName,
+        value: group.approvalRate,
+        sampleSize: group.total,
+        periodStart,
+        periodEnd,
+        metadata: JSON.parse(JSON.stringify({ impactRatio: di.impactRatio, hasPotentialDisparateImpact: di.hasPotentialDisparateImpact })),
+      }))
+    ),
+  });
 
   // Store report
   const dbReport = await prisma.disparityReport.create({
@@ -86,6 +89,14 @@ export async function runFairnessAnalysis(
     },
   });
 
+  await recordAudit({
+    tableName: "DisparityReport",
+    recordId: dbReport.id,
+    action: "FAIRNESS_ANALYSIS",
+    after: { applications: analysisData.length, findings: report.disparateImpactResults.filter((r) => r.hasPotentialDisparateImpact).length },
+  });
+
+  revalidatePath("/dashboard", "layout");
   return { success: true, data: { reportId: dbReport.id } };
 }
 
@@ -138,8 +149,9 @@ export async function getDisparityReports() {
 
 export async function getDisparityReport(id: string) {
   const { orgId } = await getAuthContext();
-  return prisma.disparityReport.findFirstOrThrow({
+  return prisma.disparityReport.findFirst({
     where: { id, organizationId: orgId },
+    include: { burdenShiftingAnalyses: { orderBy: { createdAt: "desc" } } },
   });
 }
 
@@ -160,24 +172,41 @@ export async function submitBurdenShiftingAnalysis(
 ): Promise<ActionResult<{ id: string }>> {
   const denied = await requireFullAccess();
   if (denied) return denied;
-  const { orgId, userId } = await getAuthContext();
+  const { orgId, userId, userEmail } = await getAuthContext();
   // Verify report belongs to org
-  await prisma.disparityReport.findFirstOrThrow({
+  const report = await prisma.disparityReport.findFirst({
     where: { id: disparityReportId, organizationId: orgId },
+    select: { id: true },
   });
+  if (!report) return { success: false, error: "Disparity report not found" };
 
   const analysis = await prisma.burdenShiftingAnalysis.create({
-    data: { ...data, disparityReportId, analyzedBy: userId },
+    data: { ...data, disparityReportId, analyzedBy: userEmail ?? userId },
   });
 
-  revalidatePath("/dashboard/fairness");
+  await recordAudit({
+    tableName: "BurdenShiftingAnalysis",
+    recordId: analysis.id,
+    action: "BURDEN_SHIFTING_ANALYSIS",
+    after: { protectedClass: data.protectedClass, conclusion: data.conclusion ?? null },
+    metadata: { disparityReportId },
+  });
+  await preserveEvidence({
+    entityType: "disparity_report",
+    entityId: disparityReportId,
+    documentType: "burden_shifting_analysis",
+    content: data,
+    description: `Three-step burden-shifting analysis — ${data.protectedClass}`,
+  });
+
+  revalidatePath("/dashboard/fairness", "layout");
   return { success: true, data: { id: analysis.id } };
 }
 
 export async function getBurdenShiftingAnalyses(disparityReportId: string) {
   const { orgId } = await getAuthContext();
   return prisma.burdenShiftingAnalysis.findMany({
-    where: { disparityReportId },
+    where: { disparityReportId, disparityReport: { organizationId: orgId } },
     orderBy: { createdAt: "desc" },
   });
 }

@@ -1,32 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, ArrowRight } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ArrowRight, Eye } from "lucide-react";
 import { useAccessTier } from "@/components/providers/access-tier-provider";
 
 export function PreviewBanner() {
   const accessTier = useAccessTier();
-  if (accessTier === "FULL") return null;
+  const pathname = usePathname();
+  if (accessTier === "FULL" || pathname === "/dashboard/settings") return null;
 
   return (
-    <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 mb-6 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <Eye className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+    <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800/60 dark:bg-amber-950/30">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+          <Eye className="size-3.5" />
+        </div>
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-            Preview Mode
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-400">
-            You&apos;re viewing FairAudit with demo data. Write actions are locked until access is approved.
+          <p className="text-sm font-medium text-amber-950 dark:text-amber-100">You&apos;re in a preview workspace</p>
+          <p className="text-xs leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+            Load the sample portfolio to explore every module. Recording determinations, notices, and overrides unlocks with full access.
           </p>
         </div>
       </div>
       <Link
         href="/dashboard/settings"
-        className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 flex-shrink-0"
+        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
       >
-        Request Access
-        <ArrowRight className="h-3 w-3" />
+        Request full access
+        <ArrowRight className="size-3.5" />
       </Link>
     </div>
   );

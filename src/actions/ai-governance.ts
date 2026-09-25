@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { preserveEvidence, recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function getComplianceScores() {
@@ -139,7 +140,7 @@ export async function getComplianceScores() {
 export async function generateAIA(): Promise<ActionResult<{ id: string }>> {
   const denied = await requireFullAccess();
   if (denied) return denied;
-  const { orgId, userId } = await getAuthContext();
+  const { orgId, userId, userEmail } = await getAuthContext();
 
   const scores = await getComplianceScores();
 
@@ -232,8 +233,22 @@ export async function generateAIA(): Promise<ActionResult<{ id: string }>> {
       auditCompleteness: scores.auditCompleteness,
       findings: JSON.parse(JSON.stringify(findings)),
       mitigationActions: JSON.parse(JSON.stringify(mitigationActions)),
-      generatedBy: userId,
+      generatedBy: userEmail ?? userId,
     },
+  });
+
+  await recordAudit({
+    tableName: "AlgorithmicImpactAssessment",
+    recordId: aia.id,
+    action: "AIA_GENERATED",
+    after: { riskClassification, overallGrade: scores.overallGrade },
+  });
+  await preserveEvidence({
+    entityType: "aia",
+    entityId: aia.id,
+    documentType: "algorithmic_impact_assessment",
+    content: { scores, findings, mitigationActions },
+    description: `Algorithmic impact assessment — risk ${riskClassification}`,
   });
 
   revalidatePath("/dashboard/ai-governance");

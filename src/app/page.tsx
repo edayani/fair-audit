@@ -1,490 +1,475 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import {
+  Accessibility,
+  Archive,
   ArrowRight,
   BarChart3,
-  Brain,
+  BookOpenCheck,
+  Bot,
   Building2,
-  Eye,
-  FileCheck,
+  ClipboardCheck,
+  FileSearch,
+  FileText,
   Fingerprint,
-  GitBranch,
-  Globe2,
-  Layers3,
+  Gavel,
+  HeartHandshake,
+  Home,
+  KeyRound,
+  Landmark,
+  Layers,
   Lock,
+  MessageSquareWarning,
+  Radar,
   Scale,
   ScrollText,
-  Shield,
   ShieldCheck,
-  Sparkles,
-  Users2,
-  Workflow,
+  UserCheck,
+  Users,
 } from "lucide-react";
+import { SiteHeader } from "@/components/marketing/site-header";
+import { SiteFooter } from "@/components/marketing/site-footer";
+import { ProductPreview } from "@/components/marketing/product-preview";
 
-const audienceBands = [
-  "Portfolio Operators",
-  "Affordable Housing Teams",
-  "AI Governance Committees",
-  "Enterprise Compliance",
-  "Model Risk Teams",
-  "Asset Managers",
-  "Screening Policy Leads",
+const AUTHORITIES = [
+  { name: "Fair Housing Act", cite: "42 U.S.C. § 3601 et seq." },
+  { name: "Fair Credit Reporting Act", cite: "15 U.S.C. § 1681 et seq." },
+  { name: "HUD criminal-records guidance", cite: "HUD OGC, Apr. 4, 2016" },
+  { name: "Section 504", cite: "Rehabilitation Act of 1973" },
+  { name: "Violence Against Women Act", cite: "34 U.S.C. § 12491" },
+  { name: "Source-of-income laws", cite: "e.g., Cal. Gov. Code § 12955" },
 ];
 
-const heroHighlights = [
+const PRESSURES = [
   {
-    icon: ShieldCheck,
-    title: "Boardroom confidence",
-    description: "A defensible audit trail built for counsel, regulators, executive reporting, and formal governance review.",
+    icon: Bot,
+    title: "Automated scores, human consequences",
+    body: "Screening vendors return opaque scores and raw records. When a facially neutral criterion screens out voucher holders or people with old, dismissed charges, the housing provider — not the vendor — answers for the discriminatory effect.",
   },
   {
-    icon: Users2,
-    title: "Role-aware workflows",
-    description: "Separate operators, reviewers, and administrators through workflow orchestration and cleaner approval controls.",
+    icon: Layers,
+    title: "Program rules layered on civil-rights law",
+    body: "LIHTC, Housing Choice Vouchers, HOME, and Continuum of Care funding each add obligations — Housing First commitments, VAWA protections, Section 504 — on top of the Fair Housing Act and state law.",
   },
   {
     icon: ScrollText,
-    title: "Evidence on demand",
-    description: "Turn day-to-day screening operations into audit-ready documentation, AI assurance records, and compliance artifacts.",
+    title: "Records reconstructed after the complaint",
+    body: "When a fair-housing agency, auditor, or court asks why an applicant was denied, most operators rebuild the story from email. By then the reasoning, the notice, and the chance to cure are gone.",
   },
 ];
 
-const commandSurfaces = [
+const PILLARS = [
   {
+    eyebrow: "Adjudicate",
+    title: "Decide on a written standard",
+    icon: Gavel,
+    items: [
+      { icon: BookOpenCheck, name: "Versioned screening policies", body: "Published criteria per property, with guardrails that flag unlawful or high-risk rules as they're drafted." },
+      { icon: FileSearch, name: "Data intake & accuracy", body: "Normalize every vendor, match identity, and quarantine stale, mismatched, or disposition-less records." },
+      { icon: Scale, name: "Relevance to tenancy", body: "Each record is tested for a genuine nexus to tenancy before it may count against anyone." },
+      { icon: ClipboardCheck, name: "Human review queue", body: "Borderline cases route to a qualified reviewer; overrides require a written justification." },
+    ],
+  },
+  {
+    eyebrow: "Protect",
+    title: "Guarantee the applicant's rights",
+    icon: HeartHandshake,
+    items: [
+      { icon: UserCheck, name: "Individualized assessment", body: "The four-factor review HUD guidance calls for before any criminal-history-based denial." },
+      { icon: MessageSquareWarning, name: "Challenge docket", body: "Applicants dispute accuracy, relevance, or offer mitigation — and receive a written resolution." },
+      { icon: Accessibility, name: "Reasonable accommodations", body: "Requests tracked through the interactive process without ever recording a diagnosis." },
+      { icon: FileText, name: "Adverse-action notices", body: "FCRA-compliant notices with principal reasons, agency disclosures, and dispute rights." },
+    ],
+  },
+  {
+    eyebrow: "Monitor",
+    title: "Measure outcomes, not intentions",
     icon: BarChart3,
-    eyebrow: "Executive Command Center",
-    title: "A portfolio-level view of exposure, review queues, policy health, and model-risk posture.",
-    description:
-      "Give leadership one place to understand regulatory exposure, accountability controls, algorithmic governance posture, and operational discipline across screening activity.",
-    details: ["Cross-property visibility", "Disparity monitoring", "Executive escalation snapshots"],
-    accent: "from-slate-950 via-slate-900 to-slate-800 text-white",
+    items: [
+      { icon: BarChart3, name: "Disparate-impact testing", body: "Approval rates by protected class against the four-fifths benchmark, with sample-size floors." },
+      { icon: Scale, name: "Burden-shifting analysis", body: "A structured record of necessity and less discriminatory alternatives for every flagged disparity." },
+      { icon: Radar, name: "Proxy & drift detection", body: "Catch features that stand in for protected traits, and practice drifting from written policy." },
+      { icon: Bot, name: "AI governance", body: "Scorecards, model cards, and algorithmic impact assessments aligned to the NIST AI RMF." },
+    ],
   },
   {
-    icon: Layers3,
-    eyebrow: "Policy Studio",
-    title: "Jurisdiction-aware policy orchestration with human-readable logic and cleaner governance.",
-    description:
-      "Move beyond static checklists with configurable criteria, review gates, exception handling, and documented controls that legal, risk, and operations teams can actually inspect.",
-    details: ["Versioned screening criteria", "Rule overlays by jurisdiction", "Human review checkpoints"],
-    accent: "from-white via-slate-50 to-slate-100 text-slate-950",
-  },
-  {
-    icon: FileCheck,
-    eyebrow: "Evidence Vault",
-    title: "An audit package built while the work is happening, not reconstructed after the fact.",
-    description:
-      "Capture overrides, applicant challenges, fairness analysis, adverse-action support, and supporting documents in the same operating layer.",
-    details: ["Immutable activity history", "Decision-linked documents", "Remediation evidence"],
-    accent: "from-[#eef4ff] via-white to-[#f6f8fb] text-slate-950",
+    eyebrow: "Preserve",
+    title: "Keep the administrative record",
+    icon: Archive,
+    items: [
+      { icon: ScrollText, name: "Append-only audit trail", body: "Every determination, review, override, and notice — attributed and time-stamped." },
+      { icon: Fingerprint, name: "Evidence vault", body: "Notices and assessments sealed with SHA-256 hashes to establish chain of custody." },
+      { icon: Landmark, name: "Jurisdiction overlays", body: "Federal, state, and local rules layered per property; the most protective standard controls." },
+      { icon: Lock, name: "Tenant isolation", body: "Every query scoped to your organization; audit and evidence tables reject edits and deletions." },
+    ],
   },
 ];
 
-const enterprisePillars = [
+const STEPS = [
+  { title: "Publish a written standard", body: "Adopt versioned, property-specific criteria. FairAudit flags source-of-income screens, blanket criminal bans, and other high-risk rules before they take effect." },
+  { title: "Test every record", body: "Vendor data is normalized, matched to the right person, and labeled for relevance. Arrests without convictions, sealed records, and stale filings never reach the decision." },
+  { title: "Adjudicate with reasons", body: "The engine applies the policy and states a reason code for every adverse factor. Anything requiring judgment goes to a person — never to a black box." },
+  { title: "Give notice, hear the challenge", body: "Applicants receive the principal reasons and their rights, and can contest accuracy, relevance, or offer mitigation. Each challenge ends in a written resolution." },
+  { title: "Monitor and preserve", body: "Outcomes are tested for disparate impact across protected classes, drift is flagged daily, and the complete record is preserved for audit or litigation." },
+];
+
+const SAFEGUARDS = [
+  { safeguard: "Notice of reasons", does: "Plain-language reason codes, each tied to a published criterion", authority: "FCRA § 615(a), 15 U.S.C. § 1681m(a)" },
+  { safeguard: "Maximum possible accuracy", does: "Identity matching and quarantine of mismatched or stale records", authority: "FCRA § 607(b), 15 U.S.C. § 1681e(b)" },
+  { safeguard: "Opportunity to be heard", does: "Accuracy, relevance, and mitigation challenges resolved in writing", authority: "HUD OGC Guidance on Criminal Records (2016)" },
+  { safeguard: "Individualized assessment", does: "Four-factor review before any criminal-history-based denial", authority: "HUD OGC (2016); Cal. Code Regs. tit. 2, § 12264 et seq." },
+  { safeguard: "Reasonable accommodation", does: "Interactive process tracked from request to resolution", authority: "42 U.S.C. § 3604(f)(3)(B); Section 504" },
+  { safeguard: "Survivor protections", does: "Mitigation pathway for records arising from domestic violence", authority: "VAWA, 34 U.S.C. § 12491" },
+  { safeguard: "Source-of-income neutrality", does: "Guardrails against screening out voucher holders", authority: "Cal. Gov. Code § 12955; state & local SOI laws" },
+  { safeguard: "Discriminatory-effects review", does: "Four-fifths screening plus a three-step burden-shifting record", authority: "Inclusive Communities, 576 U.S. 519 (2015)" },
+];
+
+const AUDIENCES = [
+  { icon: Building2, title: "Affordable housing operators", body: "LIHTC, HOME, and project-based Section 8 portfolios that need uniform, well-documented screening across dozens of properties and site teams." },
+  { icon: Home, title: "Supportive & homeless housing", body: "Continuum of Care and Housing First programs that must keep barriers low while documenting every denial and accommodation." },
+  { icon: KeyRound, title: "Housing authorities & voucher programs", body: "PHAs and partners serving Housing Choice Voucher, HUD-VASH, and Emergency Housing Voucher households." },
+  { icon: Users, title: "Asset managers & counsel", body: "Compliance leaders, investors, and outside counsel who need portfolio-wide visibility and a record that holds up." },
+];
+
+const FAQ = [
   {
-    icon: Globe2,
-    title: "Multi-organization ready",
-    description: "Structured for multi-tenant teams operating multiple properties, portfolios, stakeholders, and governance lanes.",
+    q: "Does FairAudit make tenant-screening decisions?",
+    a: "No. FairAudit applies the written policy you publish, explains the result, and routes anything requiring judgment to a qualified person on your team. It is a compliance and accountability layer — your staff remain the decision-makers.",
   },
   {
-    icon: GitBranch,
-    title: "Governance built into flow",
-    description: "Every review, override, and escalation becomes part of the workflow fabric instead of a disconnected side note.",
+    q: "Is FairAudit a consumer reporting agency?",
+    a: "No. FairAudit does not furnish consumer reports. It organizes and evaluates the reports your screening vendors provide, and generates the adverse-action notices the Fair Credit Reporting Act requires you to send.",
   },
   {
-    icon: Brain,
-    title: "Explainability by default",
-    description: "Make AI recommendations legible enough for internal reviewers, compliance teams, and external scrutiny.",
+    q: "How is AI used?",
+    a: "Assistively and never autonomously. AI can draft structured criteria from a plain-language policy or suggest features that may act as proxies for protected traits. Every AI output requires human review before it has any effect, and demographic data such as race or disability is never an input to a determination.",
   },
   {
-    icon: Lock,
-    title: "Risk controls, not just analytics",
-    description: "Pair fairness monitoring with policy enforcement, AI assurance, evidence retention, and approval discipline.",
+    q: "Which laws and jurisdictions are covered?",
+    a: "The federal Fair Housing Act, FCRA, HUD guidance, Section 504, and VAWA, with a California overlay (FEHA, source-of-income protection, and criminal-history regulations) configured by default. Additional state and local rule sets can be layered per property.",
+  },
+  {
+    q: "Does FairAudit replace legal counsel?",
+    a: "No. FairAudit operationalizes legal standards and preserves the record, but it does not provide legal advice. We recommend reviewing policies and any narrowing of the governing standard with counsel.",
+  },
+  {
+    q: "Can we try it without real applicant data?",
+    a: "Yes. Every new workspace can load a sample portfolio — a LIHTC family property, permanent supportive housing, and a senior community — with applicants, decisions, challenges, notices, and civil-rights analytics.",
   },
 ];
 
-const operatingModel = [
-  {
-    step: "01",
-    title: "Set the screening standard",
-    description: "Configure policy logic, jurisdiction overlays, review thresholds, and compliance-by-design controls with a structure teams can govern over time.",
-  },
-  {
-    step: "02",
-    title: "Route high-stakes decisions",
-    description: "Send the right applications to human review with context around relevance, consistency, discriminatory effect, and adverse-action defensibility.",
-  },
-  {
-    step: "03",
-    title: "Retain the evidence trail",
-    description: "Preserve the analysis, supporting records, operator actions, and governance metadata needed for executive reporting or audit response.",
-  },
-];
-
-const governanceSignals = [
-  { label: "Fair housing rule overlays", value: "Multi-jurisdiction compliance orchestration", icon: Scale },
-  { label: "Decision accountability model", value: "Five-question review discipline", icon: Eye },
-  { label: "Assessment layer", value: "Explainable AI + human review context", icon: Fingerprint },
-  { label: "Operating footprint", value: "Built for teams, portfolios, counsel, and risk", icon: Building2 },
-];
-
-export default async function HomePage() {
-  const { userId } = await auth();
-  if (userId) redirect("/dashboard");
-
+function SectionHeading({ eyebrow, title, body, center = false }: { eyebrow: string; title: React.ReactNode; body?: React.ReactNode; center?: boolean }) {
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,rgba(60,88,132,0.16),transparent_32%),linear-gradient(180deg,#f7f9fc_0%,#eef3f8_42%,#ffffff_100%)] text-slate-950">
-      <div className="absolute inset-x-0 top-0 -z-10 h-[32rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(241,245,249,0.5),rgba(212,224,239,0.45))]" />
-      <div className="absolute left-1/2 top-24 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-[rgba(44,77,119,0.22)] blur-3xl" />
-      <div className="absolute right-0 top-60 -z-10 h-80 w-80 rounded-full bg-[rgba(128,152,186,0.18)] blur-3xl" />
+    <div className={center ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a57f2c]">{eyebrow}</p>
+      <h2 className="mt-3 font-serif text-3xl font-semibold leading-[1.12] tracking-tight text-balance text-slate-950 sm:text-[42px]">{title}</h2>
+      {body && <p className="mt-4 text-lg leading-relaxed text-slate-600 text-pretty">{body}</p>}
+    </div>
+  );
+}
 
-      <header className="sticky top-0 z-50 border-b border-white/60 bg-white/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_16px_40px_rgba(15,23,42,0.2)]">
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">FairAudit</div>
-              <div className="text-sm text-slate-600">Fair housing governance for modern screening teams</div>
-            </div>
-          </div>
-
-          <nav className="hidden items-center gap-8 text-sm text-slate-600 md:flex">
-            <a href="#platform" className="transition-colors hover:text-slate-950">Platform</a>
-            <a href="#governance" className="transition-colors hover:text-slate-950">Governance</a>
-            <a href="#operators" className="transition-colors hover:text-slate-950">Operating Model</a>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link href="/sign-in" className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-slate-950 sm:inline-flex">
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
-              className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-medium text-white shadow-[0_16px_32px_rgba(15,23,42,0.18)] transition-transform hover:-translate-y-0.5"
-            >
-              Request Access
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </header>
+export default function HomePage() {
+  return (
+    <div className="bg-[#f7f8fb] text-slate-950">
+      <SiteHeader />
 
       <main>
-        <section className="mx-auto max-w-7xl px-4 pb-18 pt-10 sm:px-6 lg:px-8 lg:pb-24 lg:pt-16">
-          <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
-            <div className="flex flex-col items-center text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-600 shadow-sm backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5" />
-                Enterprise-grade AI governance and fair housing controls
-              </div>
-
-              <div className="mt-7 max-w-3xl">
-                <p className="text-sm font-medium uppercase tracking-[0.26em] text-slate-500">
-                  Built for organizations running complex tenant-screening, compliance, and model-governance programs
-                </p>
-                <h1 className="mt-5 max-w-4xl font-serif text-5xl leading-[0.95] font-semibold tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">
-                  The control layer that makes high-stakes screening decisions feel
-                  <span className="block text-slate-600">institutional, governed, and defensible.</span>
-                </h1>
-                <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
-                  FairAudit turns fair housing compliance into an operating system for policy orchestration,
-                  explainable AI review, workflow automation, fairness analysis, and audit-ready evidence
-                  so leaders can scale with sharper confidence.
-                </p>
-              </div>
-
-              <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+        {/* Hero */}
+        <section className="relative overflow-hidden bg-[#0b1322] text-white">
+          <div className="bg-grid-light absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" aria-hidden />
+          <div className="absolute left-1/2 top-0 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(49,86,160,0.35),transparent_65%)]" aria-hidden />
+          <div className="relative mx-auto grid max-w-7xl gap-14 px-4 pb-20 pt-16 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-12 lg:px-8 lg:pb-28 lg:pt-24">
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80">
+                <span className="size-1.5 rounded-full bg-[#d6b25e]" />
+                Fair housing compliance for affordable &amp; supportive housing
+              </p>
+              <h1 className="mt-6 font-serif text-[42px] font-semibold leading-[1.04] tracking-tight text-balance sm:text-6xl lg:text-[64px]">
+                Every screening decision, <span className="text-[#d6b25e]">lawful</span> and defensible.
+              </h1>
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/70 text-pretty">
+                FairAudit is AI-assisted compliance infrastructure for property managers of affordable, supportive, and
+                homeless housing. Every applicant receives due process — and every determination stands up to a fair-housing
+                investigator, an auditor, or a court.
+              </p>
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href="/sign-up"
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-7 py-3.5 text-base font-medium text-white shadow-[0_22px_40px_rgba(15,23,42,0.18)] transition-transform hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d6b25e] px-6 py-3 text-[15px] font-semibold text-[#0b1322] shadow-lg shadow-black/20 transition-colors hover:bg-[#e2c276]"
                 >
-                  Launch the Platform
-                  <ArrowRight className="h-4 w-4" />
+                  Explore with a sample portfolio
+                  <ArrowRight className="size-4" />
                 </Link>
                 <Link
-                  href="/sign-in"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/85 px-7 py-3.5 text-base font-medium text-slate-700 shadow-sm transition-colors hover:bg-white"
+                  href="#how-it-works"
+                  className="inline-flex items-center justify-center rounded-lg border border-white/20 px-6 py-3 text-[15px] font-medium text-white transition-colors hover:bg-white/10"
                 >
-                  View Demo Workspace
+                  See how it works
                 </Link>
               </div>
-
-              <div className="mt-10 grid gap-4 sm:grid-cols-3">
-                {heroHighlights.map((item) => (
-                  <div key={item.title} className="rounded-3xl border border-white/70 bg-white/70 p-5 text-center shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur">
-                    <item.icon className="mx-auto h-5 w-5 text-slate-950" />
-                    <h2 className="mt-4 text-sm font-semibold text-slate-950">{item.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+              <dl className="mt-12 grid max-w-lg grid-cols-3 gap-6 border-t border-white/10 pt-8">
+                {[
+                  { k: "13", v: "integrated compliance modules" },
+                  { k: "8", v: "due-process safeguards mapped to law" },
+                  { k: "3", v: "challenge pathways: accuracy, relevance, mitigation" },
+                ].map((s) => (
+                  <div key={s.v}>
+                    <dt className="font-serif text-3xl font-semibold text-white">{s.k}</dt>
+                    <dd className="mt-1 text-xs leading-snug text-white/55">{s.v}</dd>
                   </div>
                 ))}
-              </div>
-
-              <div className="mt-10 flex flex-wrap justify-center gap-3 text-sm text-slate-600">
-                {audienceBands.map((band) => (
-                  <div key={band} className="rounded-full border border-slate-300/70 bg-white/75 px-4 py-2 shadow-sm backdrop-blur">
-                    {band}
-                  </div>
-                ))}
-              </div>
+              </dl>
             </div>
+            <ProductPreview />
+          </div>
+        </section>
 
-            <div className="relative">
-              <div className="absolute -inset-6 rounded-[2rem] bg-[radial-gradient(circle_at_top,rgba(85,114,156,0.18),transparent_55%)] blur-2xl" />
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-slate-950 p-6 text-center text-white shadow-[0_30px_90px_rgba(15,23,42,0.22)]">
-                <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(255,255,255,0.08),transparent_42%,rgba(90,111,146,0.18))]" />
-                <div className="relative">
-                  <div className="flex flex-col items-center gap-4">
+        {/* Authorities strip */}
+        <section aria-label="Legal frameworks" className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <p className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Operationalizes the law that governs your screening</p>
+            <ul className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
+              {AUTHORITIES.map((a) => (
+                <li key={a.name} className="text-center">
+                  <p className="text-sm font-semibold text-slate-900">{a.name}</p>
+                  <p className="mt-0.5 font-serif text-xs italic text-slate-500">{a.cite}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Why */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <SectionHeading
+            eyebrow="Why it matters"
+            title="Affordable housing runs on screening. Screening runs on legal exposure."
+            body="For households leaving homelessness, rebuilding credit, or holding a voucher, a single unexplained denial can mean another night without housing. For operators, the same denial can become a fair-housing complaint with no record to answer it."
+          />
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
+            {PRESSURES.map((p) => (
+              <div key={p.title} className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-[#0b1322] text-[#d6b25e]">
+                  <p.icon className="size-5" />
+                </div>
+                <h3 className="mt-5 text-lg font-semibold text-slate-950">{p.title}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{p.body}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-8 max-w-3xl text-sm leading-relaxed text-slate-500">
+            Algorithmic tenant screening is now a live civil-rights question: in <em>Louis v. SafeRent Solutions</em> (D. Mass.),
+            voucher holders challenged an automated screening score under the Fair Housing Act — a case that settled in 2024.
+          </p>
+        </section>
+
+        {/* Platform */}
+        <section id="platform" className="scroll-mt-20 border-y border-slate-200 bg-white py-20 lg:py-28">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <SectionHeading
+              eyebrow="The platform"
+              title="One system of record for the entire screening lifecycle."
+              body="Thirteen integrated modules take an application from raw consumer report to a reasoned, reviewable, and preserved determination — and keep watch over outcomes across the whole portfolio."
+            />
+            <div className="mt-14 grid gap-6 lg:grid-cols-2">
+              {PILLARS.map((pillar) => (
+                <div key={pillar.eyebrow} className="rounded-2xl border border-slate-200 bg-[#f7f8fb] p-6 sm:p-8">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-[#1f3563] text-white">
+                      <pillar.icon className="size-5" />
+                    </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Illustrative platform snapshot</p>
-                      <h2 className="mt-2 text-2xl font-semibold tracking-tight">Operations Control Center</h2>
-                    </div>
-                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                      Live governance layer
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#a57f2c]">{pillar.eyebrow}</p>
+                      <h3 className="font-serif text-xl font-semibold text-slate-950">{pillar.title}</h3>
                     </div>
                   </div>
-
-                  <div className="mt-6 grid grid-cols-2 gap-4">
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Active properties</p>
-                      <p className="mt-3 text-3xl font-semibold">128</p>
-                      <p className="mt-2 text-sm text-slate-300">Governed under a shared policy standard</p>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Review queue</p>
-                      <p className="mt-3 text-3xl font-semibold">17</p>
-                      <p className="mt-2 text-sm text-slate-300">Escalated decisions awaiting human review</p>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Jurisdictions active</p>
-                      <p className="mt-3 text-3xl font-semibold">6</p>
-                      <p className="mt-2 text-sm text-slate-300">Overlay-aware policy and notice logic</p>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Open risk alerts</p>
-                      <p className="mt-3 text-3xl font-semibold">2</p>
-                      <p className="mt-2 text-sm text-slate-300">Flagged for counsel and compliance leadership</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/6 p-5">
-                    <div className="flex flex-col items-center gap-4 text-center">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Executive briefing</p>
-                        <p className="mt-2 text-lg font-medium">Policy posture remains stable across the portfolio and governance stack.</p>
-                      </div>
-                      <div className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-medium text-emerald-300">
-                        Audit-ready
-                      </div>
-                    </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl bg-white/5 p-4">
-                        <p className="text-xs text-slate-400">Decision consistency</p>
-                        <p className="mt-2 text-lg font-semibold">Structured review path</p>
-                      </div>
-                      <div className="rounded-2xl bg-white/5 p-4">
-                        <p className="text-xs text-slate-400">Applicant challenge flow</p>
-                        <p className="mt-2 text-lg font-semibold">Tracked and retained</p>
-                      </div>
-                      <div className="rounded-2xl bg-white/5 p-4">
-                        <p className="text-xs text-slate-400">Fairness oversight</p>
-                        <p className="mt-2 text-lg font-semibold">Continuous monitoring</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="mt-5 text-xs text-slate-400">
-                    Product visuals shown as illustrative examples of the operating experience.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="border-y border-slate-200/70 bg-white/65 py-6 backdrop-blur" id="platform">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-4 px-4 text-center sm:px-6 lg:px-8">
-            <span className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">Built for</span>
-            {audienceBands.map((band) => (
-              <span key={band} className="text-sm font-medium text-slate-700">
-                {band}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">Platform surface</p>
-            <h2 className="mt-4 font-serif text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-              Designed to feel less like a checklist and more like a serious control environment.
-            </h2>
-            <p className="mt-5 text-lg leading-8 text-slate-600">
-              Every section of the product is meant to signal operational maturity: decision controls,
-              review discipline, retained evidence, AI assurance layers, and a leadership-level picture of exposure.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {commandSurfaces.map((surface, index) => (
-              <div
-                key={surface.title}
-                className={`relative overflow-hidden rounded-[2rem] border border-slate-200/70 bg-gradient-to-br p-7 shadow-[0_25px_70px_rgba(15,23,42,0.08)] ${surface.accent} ${
-                  index === 0 ? "lg:col-span-2" : ""
-                }`}
-              >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_38%)]" />
-                <div className="relative text-center">
-                  <surface.icon className={`mx-auto h-6 w-6 ${index === 0 ? "text-slate-200" : "text-slate-700"}`} />
-                  <p className={`mt-6 text-xs font-semibold uppercase tracking-[0.28em] ${index === 0 ? "text-slate-300" : "text-slate-500"}`}>
-                    {surface.eyebrow}
-                  </p>
-                  <h3 className="mx-auto mt-3 max-w-2xl text-2xl font-semibold tracking-tight">{surface.title}</h3>
-                  <p className={`mx-auto mt-4 max-w-2xl text-sm leading-7 ${index === 0 ? "text-slate-300" : "text-slate-600"}`}>
-                    {surface.description}
-                  </p>
-
-                  <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                    {surface.details.map((detail) => (
-                      <div
-                        key={detail}
-                        className={`rounded-2xl border px-4 py-4 text-sm ${
-                          index === 0
-                            ? "border-white/10 bg-white/6 text-slate-100"
-                            : "border-slate-200/70 bg-white/70 text-slate-700"
-                        }`}
-                      >
-                        {detail}
-                      </div>
+                  <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+                    {pillar.items.map((item) => (
+                      <li key={item.name} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <item.icon className="size-4 text-[#1f3563]" />
+                        <p className="mt-2.5 text-sm font-semibold text-slate-900">{item.name}</p>
+                        <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{item.body}</p>
+                      </li>
                     ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-14" id="governance">
-          <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-8 shadow-[0_25px_70px_rgba(15,23,42,0.06)] backdrop-blur sm:p-10">
-            <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="text-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">Governance posture</p>
-                <h2 className="mt-4 font-serif text-4xl font-semibold tracking-[-0.04em] text-slate-950">
-                  The product language should feel credible to operators, counsel, and leadership alike.
-                </h2>
-                <p className="mt-5 text-lg leading-8 text-slate-600">
-                  FairAudit is designed around real organizational tension: faster throughput, tighter controls,
-                  stronger model governance, and clearer evidence when a decision gets challenged.
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {enterprisePillars.map((pillar) => (
-                  <div key={pillar.title} className="rounded-3xl border border-slate-200/80 bg-slate-50/80 p-6 text-center">
-                    <pillar.icon className="mx-auto h-5 w-5 text-slate-950" />
-                    <h3 className="mt-4 text-lg font-semibold text-slate-950">{pillar.title}</h3>
-                    <p className="mt-2 text-sm leading-7 text-slate-600">{pillar.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24" id="operators">
-          <div className="grid gap-12 lg:grid-cols-[0.82fr_1.18fr]">
-            <div className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">Operating model</p>
-              <h2 className="mt-4 font-serif text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-                A cleaner, more enterprise-ready narrative from intake to final decision.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">
-                The landing page should communicate that this is a serious platform for organizations that
-                need structure, not another lightweight compliance dashboard.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {operatingModel.map((item) => (
-                <div key={item.step} className="rounded-[1.75rem] border border-slate-200/70 bg-white/80 p-6 text-center shadow-[0_20px_50px_rgba(15,23,42,0.05)]">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
-                        {item.step}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-semibold text-slate-950">{item.title}</h3>
-                        <p className="mt-2 text-sm leading-7 text-slate-600">{item.description}</p>
-                      </div>
-                    </div>
-                    <Workflow className="h-5 w-5 text-slate-400" />
-                  </div>
+                  </ul>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
-          <div className="rounded-[2rem] border border-slate-200/70 bg-slate-950 p-8 text-white shadow-[0_30px_90px_rgba(15,23,42,0.22)] sm:p-10">
-            <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="text-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-400">Signal quality</p>
-                <h2 className="mt-4 font-serif text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
-                  The visual language now tells a stronger story about scale and seriousness.
-                </h2>
-                <p className="mt-5 text-lg leading-8 text-slate-300">
-                  Premium spacing, richer surfaces, sharper hierarchy, and a stronger governance narrative
-                  help the site feel closer to an enterprise AI platform than an early-stage prototype.
-                </p>
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  <div className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-200">Executive-ready reporting</div>
-                  <div className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-200">Cross-functional workflow automation</div>
-                  <div className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-200">Audit posture by design</div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {governanceSignals.map((signal) => (
-                  <div key={signal.label} className="rounded-3xl border border-white/10 bg-white/6 p-5 text-center">
-                    <signal.icon className="mx-auto h-5 w-5 text-slate-200" />
-                    <p className="mt-4 text-sm font-medium text-slate-300">{signal.label}</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{signal.value}</p>
+        {/* How it works */}
+        <section id="how-it-works" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <SectionHeading
+                eyebrow="How it works"
+                title="From application to a determination you can defend."
+                body="FairAudit sits between your screening vendors and your final decision. It doesn't replace your staff's judgment — it structures it, documents it, and makes it consistent."
+              />
+              <Link href="/sign-up" className="mt-8 inline-flex items-center gap-2 text-[15px] font-semibold text-[#1f3563] hover:underline">
+                Walk through the sample portfolio <ArrowRight className="size-4" />
+              </Link>
+            </div>
+            <ol className="relative space-y-4">
+              {STEPS.map((s, i) => (
+                <li key={s.title} className="relative flex gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#0b1322] font-serif text-sm font-semibold text-[#d6b25e]">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-950">{s.title}</h3>
+                    <p className="mt-1.5 text-[15px] leading-relaxed text-slate-600">{s.body}</p>
                   </div>
-                ))}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* Due process / legal framework */}
+        <section id="due-process" className="scroll-mt-20 bg-[#0b1322] py-20 text-white lg:py-28">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#d6b25e]">Legal framework</p>
+              <h2 className="mt-3 font-serif text-3xl font-semibold leading-[1.12] tracking-tight text-balance sm:text-[42px]">
+                Procedural fairness, engineered into every decision.
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-white/65">
+                Each safeguard traces to a specific source of law. The result is equal access to housing in practice — not
+                just in policy — and an evidentiary record that shows it.
+              </p>
+            </div>
+            <div className="mt-12 overflow-hidden rounded-2xl border border-white/10">
+              <div className="hidden grid-cols-[1fr_1.4fr_1.2fr] gap-6 bg-white/5 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50 md:grid">
+                <span>Safeguard</span>
+                <span>What FairAudit does</span>
+                <span>Authority</span>
               </div>
+              <ul className="divide-y divide-white/10">
+                {SAFEGUARDS.map((s) => (
+                  <li key={s.safeguard} className="grid gap-1 px-6 py-4 md:grid-cols-[1fr_1.4fr_1.2fr] md:gap-6">
+                    <span className="font-medium text-white">{s.safeguard}</span>
+                    <span className="text-sm leading-relaxed text-white/70">{s.does}</span>
+                    <span className="font-serif text-sm italic text-[#d6b25e]/90">{s.authority}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="mt-6 text-xs leading-relaxed text-white/45">
+              Citations identify the legal sources each feature is designed around. Applicability depends on the property,
+              program, and jurisdiction; consult counsel.
+            </p>
+          </div>
+        </section>
+
+        {/* Who we serve */}
+        <section id="who-we-serve" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <SectionHeading
+            eyebrow="Who we serve"
+            title="Built for the housing where the stakes are highest."
+            body="Low-barrier and publicly assisted housing serves the people most exposed to screening errors — and carries the densest web of program rules and civil-rights obligations."
+            center
+          />
+          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {AUDIENCES.map((a) => (
+              <div key={a.title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <a.icon className="size-6 text-[#1f3563]" />
+                <h3 className="mt-4 font-semibold text-slate-950">{a.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">{a.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Responsible AI + security */}
+        <section className="border-y border-slate-200 bg-white py-20 lg:py-28">
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+            <div id="responsible-ai" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-[#f7f8fb] p-8 sm:p-10">
+              <Bot className="size-7 text-[#1f3563]" />
+              <h2 className="mt-5 font-serif text-3xl font-semibold tracking-tight text-slate-950">AI that assists. People who decide.</h2>
+              <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
+                Algorithmic accountability is the product, not a disclaimer. Determinations come from a deterministic engine
+                applying your written policy; AI only drafts, and a person always approves.
+              </p>
+              <ul className="mt-6 space-y-3 text-sm text-slate-700">
+                {[
+                  "Demographic data (race, sex, familial status, disability) monitors outcomes — it never scores applicants",
+                  "Every AI suggestion is reviewable and never self-executing",
+                  "Model card and algorithmic impact assessments aligned to the NIST AI RMF",
+                  "Proxy detection for features that stand in for protected characteristics",
+                ].map((t) => (
+                  <li key={t} className="flex gap-3">
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div id="security" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-[#f7f8fb] p-8 sm:p-10">
+              <Lock className="size-7 text-[#1f3563]" />
+              <h2 className="mt-5 font-serif text-3xl font-semibold tracking-tight text-slate-950">A record built to be relied on.</h2>
+              <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
+                Compliance evidence is only as good as its integrity. FairAudit is designed so the record can&apos;t be quietly
+                rewritten after the fact.
+              </p>
+              <ul className="mt-6 space-y-3 text-sm text-slate-700">
+                {[
+                  "Organization-scoped data isolation enforced on every query",
+                  "Audit and evidence tables reject updates and deletions at the data layer",
+                  "SHA-256 content hashes on every preserved notice and assessment",
+                  "Encrypted in transit (TLS/HSTS) with attributed, time-stamped actions",
+                ].map((t) => (
+                  <li key={t} className="flex gap-3">
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-[2.25rem] border border-slate-200/70 bg-[linear-gradient(135deg,#ffffff_0%,#eef3f9_45%,#dfe7f1_100%)] p-8 shadow-[0_25px_70px_rgba(15,23,42,0.08)] sm:p-10 lg:p-14">
-            <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-              <div className="text-center lg:text-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">Final call to action</p>
-                <h2 className="mx-auto mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-                  Present FairAudit like a platform built for organizations with real operational exposure.
-                </h2>
-                <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-                  From adverse-action documentation to fairness monitoring, policy orchestration, and evidence retention,
-                  the landing page now frames the product as a serious control environment for modern housing organizations.
-                </p>
-              </div>
+        {/* FAQ */}
+        <section id="faq" className="mx-auto max-w-4xl scroll-mt-20 px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <SectionHeading eyebrow="Questions" title="Frequently asked questions" center />
+          <div className="mt-12 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+            {FAQ.map((item) => (
+              <details key={item.q} className="group px-6 py-5 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left font-medium text-slate-950">
+                  {item.q}
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
 
-              <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:flex-col">
+        {/* CTA */}
+        <section className="px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
+          <div className="relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-[#0b1322] px-6 py-16 text-center text-white sm:px-12 lg:py-20">
+            <div className="bg-grid-light absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" aria-hidden />
+            <div className="relative mx-auto max-w-2xl">
+              <Scale className="mx-auto size-8 text-[#d6b25e]" />
+              <h2 className="mt-5 font-serif text-3xl font-semibold leading-tight tracking-tight text-balance sm:text-5xl">
+                Housing is a right worth getting right.
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-white/65">
+                Create a workspace in minutes and explore FairAudit with a sample affordable-housing portfolio — no applicant
+                data required.
+              </p>
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
                   href="/sign-up"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-7 py-3.5 text-base font-medium text-white shadow-[0_20px_40px_rgba(15,23,42,0.16)]"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d6b25e] px-6 py-3 text-[15px] font-semibold text-[#0b1322] transition-colors hover:bg-[#e2c276]"
                 >
-                  Start Your Audit
-                  <ArrowRight className="h-4 w-4" />
+                  Create your workspace
+                  <ArrowRight className="size-4" />
                 </Link>
-                <Link
-                  href="/sign-in"
-                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white/85 px-7 py-3.5 text-base font-medium text-slate-700"
-                >
-                  Explore the Workspace
+                <Link href="/sign-in" className="inline-flex items-center justify-center rounded-lg border border-white/20 px-6 py-3 text-[15px] font-medium hover:bg-white/10">
+                  Sign in
                 </Link>
               </div>
             </div>
@@ -492,15 +477,7 @@ export default async function HomePage() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200/70 bg-white/60 py-8 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-center text-sm text-slate-500 sm:px-6 lg:flex-row lg:px-8 lg:text-center">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="font-medium text-slate-700">FairAudit</span>
-          </div>
-          <p>Fair housing governance, explainable screening controls, AI assurance, and audit-ready decision accountability.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

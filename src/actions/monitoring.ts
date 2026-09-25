@@ -3,7 +3,9 @@
 // Spec §4.L — Continuous Monitoring & Drift Detection Server Actions
 import { prisma } from "@/lib/prisma";
 import { getAuthContext, requireFullAccess } from "@/lib/auth";
-import { checkPolicyDrift, checkDataDrift, checkDisparityDrift } from "@/lib/engines/drift";
+import { checkPolicyDrift, checkDataDrift } from "@/lib/engines/drift";
+import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 import type { ActionResult } from "@/types";
 
 export async function runDriftDetection(): Promise<ActionResult<{ alertsCreated: number }>> {
@@ -92,6 +94,8 @@ export async function runDriftDetection(): Promise<ActionResult<{ alertsCreated:
     }
   }
 
+  await recordAudit({ tableName: "DriftAlert", recordId: orgId, action: "DRIFT_DETECTION", after: { alertsCreated } });
+  revalidatePath("/dashboard", "layout");
   return { success: true, data: { alertsCreated } };
 }
 
@@ -106,21 +110,43 @@ export async function getDriftAlerts(status?: string) {
   });
 }
 
-export async function acknowledgeDriftAlert(alertId: string, notes?: string): Promise<ActionResult> {
+export async function acknowledgeDriftAlert(alertId: string): Promise<ActionResult> {
   const denied = await requireFullAccess();
   if (denied) return denied;
-  const { orgId, userId } = await getAuthContext();
+  const { orgId, userId, userEmail } = await getAuthContext();
 
-  const alert = await prisma.driftAlert.findFirstOrThrow({
+  const alert = await prisma.driftAlert.findFirst({
     where: { id: alertId, organizationId: orgId },
   });
-
   if (!alert) return { success: false, error: "Alert not found" };
 
   await prisma.driftAlert.update({
     where: { id: alertId },
-    data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date(), acknowledgedBy: userId },
+    data: { status: "ACKNOWLEDGED", acknowledgedAt: new Date(), acknowledgedBy: userEmail ?? userId },
   });
 
+  await recordAudit({ tableName: "DriftAlert", recordId: alertId, action: "ALERT_ACKNOWLEDGED", before: { status: alert.status }, after: { status: "ACKNOWLEDGED" } });
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
+}
+
+export async function resolveDriftAlert(alertId: string, resolution: string): Promise<ActionResult> {
+  const denied = await requireFullAccess();
+  if (denied) return denied;
+  const { orgId } = await getAuthContext();
+  if (!resolution.trim()) return { success: false, error: "Describe how the alert was resolved." };
+
+  const alert = await prisma.driftAlert.findFirst({
+    where: { id: alertId, organizationId: orgId },
+  });
+  if (!alert) return { success: false, error: "Alert not found" };
+
+  await prisma.driftAlert.update({
+    where: { id: alertId },
+    data: { status: "RESOLVED", resolvedAt: new Date(), resolution },
+  });
+
+  await recordAudit({ tableName: "DriftAlert", recordId: alertId, action: "ALERT_RESOLVED", before: { status: alert.status }, after: { status: "RESOLVED", resolution } });
+  revalidatePath("/dashboard", "layout");
   return { success: true };
 }

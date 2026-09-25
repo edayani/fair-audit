@@ -1,10 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkPolicyDrift, checkDataDrift } from "@/lib/engines/drift";
 
-// Spec §4.L — Drift detection cron endpoint
-// Can be called by Vercel Cron or external scheduler
-export async function GET() {
+// Spec §4.L — Drift detection cron endpoint, invoked daily by Vercel Cron (vercel.json).
+// Vercel sends `Authorization: Bearer $CRON_SECRET`; anything else is rejected.
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const orgs = await prisma.organization.findMany({ select: { id: true } });
     let totalAlerts = 0;

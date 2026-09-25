@@ -1,6 +1,9 @@
 import { getAllAccessRequests, getAllSignedUpUsers } from "@/actions/access-request";
 import { AdminRequestsTable } from "@/components/admin/requests-table";
 import { AdminUsersTable } from "@/components/admin/users-table";
+import { PageHeader } from "@/components/shared/page-header";
+
+export const metadata = { title: "Access requests" };
 
 export default async function AdminRequestsPage() {
   const [requests, users] = await Promise.all([
@@ -10,22 +13,12 @@ export default async function AdminRequestsPage() {
 
   return (
     <div className="space-y-12">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">Access Requests</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage organization access requests. Approve to grant full access.
-        </p>
-      </div>
+      <PageHeader eyebrow="Platform admin" title="Access requests" description="Review preview workspaces requesting full access and approve or deny each request." />
 
       <AdminRequestsTable requests={requests} />
 
       <section>
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold tracking-tight">Signed Up Users</h2>
-          <p className="text-muted-foreground mt-1">
-            Review who has joined FairAudit and which organization and access tier they belong to.
-          </p>
-        </div>
+        <PageHeader title="Members" description="Everyone who has joined FairAudit, with their organization and access tier." />
 
         <AdminUsersTable users={users} />
       </section>

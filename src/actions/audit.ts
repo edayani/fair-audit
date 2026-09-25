@@ -2,7 +2,7 @@
 
 // Spec §4.K — Audit Log & Evidence Vault Server Actions
 import { prisma } from "@/lib/prisma";
-import { getAuthContext, requireFullAccess } from "@/lib/auth";
+import { getAuthContext } from "@/lib/auth";
 
 export async function getAuditLog(filters?: {
   tableName?: string;
@@ -43,7 +43,7 @@ export async function getAuditLog(filters?: {
 
 export async function getAuditEntry(id: string) {
   const { orgId } = await getAuthContext();
-  return prisma.auditLog.findFirstOrThrow({
+  return prisma.auditLog.findFirst({
     where: { id, organizationId: orgId },
   });
 }
@@ -73,31 +73,4 @@ export async function getEvidenceVault(filters?: {
   ]);
 
   return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
-}
-
-export async function storeEvidence(data: {
-  entityType: string;
-  entityId: string;
-  documentType: string;
-  fileUrl: string;
-  contentHash: string;
-  metadata?: Record<string, unknown>;
-  description?: string;
-}) {
-  const denied = await requireFullAccess();
-  if (denied) return denied;
-  const { orgId } = await getAuthContext();
-
-  return prisma.evidenceVaultEntry.create({
-    data: {
-      organizationId: orgId,
-      entityType: data.entityType,
-      entityId: data.entityId,
-      documentType: data.documentType,
-      fileUrl: data.fileUrl,
-      contentHash: data.contentHash,
-      metadata: data.metadata ? JSON.parse(JSON.stringify(data.metadata)) : undefined,
-      description: data.description,
-    },
-  });
 }

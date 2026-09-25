@@ -1,41 +1,70 @@
+import { Globe2, Landmark, MapPin } from "lucide-react";
 import { getJurisdictions } from "@/actions/jurisdiction";
 import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Card, CardHeaderRow } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { formatDate, humanize } from "@/lib/utils";
-import { Scale, Globe, MapPin } from "lucide-react";
+
+export const metadata = { title: "Jurisdictions" };
+
+const LEVEL = {
+  FEDERAL: { icon: Globe2, label: "Federal" },
+  STATE: { icon: Landmark, label: "State" },
+  LOCAL: { icon: MapPin, label: "Local" },
+} as const;
 
 export default async function JurisdictionsPage() {
   const jurisdictions = await getJurisdictions();
-  const levelIcon = (level: string) => level === "FEDERAL" ? <Globe className="h-4 w-4" /> : level === "STATE" ? <Scale className="h-4 w-4" /> : <MapPin className="h-4 w-4" />;
 
   return (
-    <div>
-      <PageHeader title="Jurisdictions" description="Federal, state, and local rule overlays (Spec §4.M)" />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Legal record"
+        authority="Spec §4.M · rule overlays"
+        title="Jurisdictions & rule overlays"
+        description="Federal, state, and local fair-housing rules layered onto each property's policy. Where rules overlap, the most protective standard controls."
+      />
 
       {jurisdictions.length === 0 ? (
-        <p className="text-muted-foreground">No jurisdictions configured. Seed demo data to populate default federal and California rules.</p>
+        <EmptyState icon={Landmark} title="No jurisdictions configured" description="Load the sample portfolio to populate federal and California rule sets." />
       ) : (
-        <div className="space-y-4">
-          {jurisdictions.map((j) => (
-            <div key={j.id} className="rounded-lg border bg-card p-6">
-              <div className="flex items-center gap-2 mb-3">
-                {levelIcon(j.level)}
-                <h3 className="text-lg font-semibold">{j.name}</h3>
-                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{j.code}</span>
-                <span className="text-xs text-muted-foreground">{humanize(j.level)}</span>
-              </div>
-              {j.rules.length > 0 && (
-                <div className="space-y-2">
-                  {j.rules.map((rule) => (
-                    <div key={rule.id} className="text-sm border-l-2 border-primary/30 pl-3">
-                      <p className="font-medium">{rule.ruleKey}</p>
-                      <p className="text-muted-foreground">{rule.ruleText}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Category: {rule.category} | Effective: {formatDate(rule.effectiveDate)}</p>
+        <div className="space-y-6">
+          {jurisdictions.map((j) => {
+            const level = LEVEL[j.level as keyof typeof LEVEL] ?? LEVEL.LOCAL;
+            return (
+              <Card key={j.id}>
+                <CardHeaderRow
+                  icon={level.icon}
+                  title={j.name}
+                  description={`${j.rules.length} rule${j.rules.length === 1 ? "" : "s"} in force`}
+                  actions={
+                    <div className="flex gap-1.5">
+                      <Badge tone="brand">{level.label}</Badge>
+                      <Badge className="font-mono">{j.code}</Badge>
                     </div>
+                  }
+                />
+                <ul className="divide-y">
+                  {j.rules.map((rule) => (
+                    <li key={rule.id} className="grid gap-1 px-5 py-4 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-6">
+                      <div>
+                        <p className="text-sm font-medium">{humanize(rule.category)}</p>
+                        <p className="font-mono text-[11px] text-muted-foreground">{rule.ruleKey}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm leading-relaxed">{rule.ruleText}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Effective {formatDate(rule.effectiveDate)}
+                          {rule.expirationDate ? ` · expires ${formatDate(rule.expirationDate)}` : ""} · v{rule.version}
+                        </p>
+                      </div>
+                    </li>
                   ))}
-                </div>
-              )}
-            </div>
-          ))}
+                </ul>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
